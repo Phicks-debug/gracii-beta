@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useCallback } from 'react'
+import { useState, useRef, useEffect, useCallback } from 'react'
 import { Send, Paperclip } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
@@ -35,14 +35,13 @@ const ToolUseIndicator = ({ isDone, isThinking }: { isDone?: boolean, isThinking
         className="group cursor-pointer"
         onClick={() => setIsExpanded(!isExpanded)}
       >
-        <span className={`text-sm ${
-          isDone 
-            ? 'text-green-600 dark:text-green-400' 
-            : 'text-gray-500 dark:text-gray-400 animate-[pulse_0.8s_ease-in-out_infinite]'
-        }`}>
+        <span className={`text-sm ${isDone
+          ? 'text-green-600 dark:text-green-400'
+          : 'text-gray-500 dark:text-gray-400 animate-[pulse_0.8s_ease-in-out_infinite]'
+          }`}>
           {isDone ? '✓ Tools used' : isThinking ? `Thinking${dots}` : `Using tools${dots}`}
         </span>
-        
+
         <AnimatePresence>
           {isExpanded && (
             <motion.div
@@ -157,11 +156,11 @@ function App() {
       textareaRef.current.style.height = `${newHeight}px`
     }
   }, [input])
-    
+
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (input.trim()) {
       setHasInteracted(true);
       const userMessage: Message = { id: Date.now(), content: input, role: 'user' };
@@ -192,7 +191,7 @@ function App() {
         if (reader) {
           const botMessageId = Date.now();
           setMessages(prevMessages => [...prevMessages, { id: botMessageId, content: '', role: 'bot' }]);
-          
+
           let text = '';
           let isUsingTool = false;
           while (true) {
@@ -200,30 +199,30 @@ function App() {
             if (done) break;
 
             const chunk = decoder.decode(value);
-            
+
             if (chunk.includes('TOOL_USE')) {
               isUsingTool = true;
-              setMessages(prevMessages => 
-                prevMessages.map(msg => 
+              setMessages(prevMessages =>
+                prevMessages.map(msg =>
                   msg.id === botMessageId ? { ...msg, toolUse: true, toolDone: false, isThinking: false, content: text } : msg
                 )
               );
               continue;
             }
-            
+
             if (chunk.includes('DONE')) {
               isUsingTool = false;
-              setMessages(prevMessages => 
-                prevMessages.map(msg => 
+              setMessages(prevMessages =>
+                prevMessages.map(msg =>
                   msg.id === botMessageId ? { ...msg, toolUse: false, toolDone: false, isThinking: true, content: text } : msg
                 )
               );
               continue;
             }
-            
+
             if (!chunk.includes('END_TURN')) {
               text += chunk;
-              setMessages(prevMessages => 
+              setMessages(prevMessages =>
                 prevMessages.map(msg => {
                   if (msg.id === botMessageId) {
                     // If we were thinking and got a new token, mark as done
@@ -268,13 +267,13 @@ function App() {
 
     const file = files[0];
     const type = getFileType(file.type);
-    
+
     // Limit to 5 files
     if (uploads.length >= 5) {
       alert('Maximum 5 files allowed');
       return;
     }
-    
+
     const upload: FileUpload = {
       id: crypto.randomUUID(),
       file,
@@ -283,7 +282,7 @@ function App() {
     };
 
     setUploads(prev => [...prev, upload]);
-    
+
     // Clear the file input value so the same file can be selected again
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
@@ -304,7 +303,7 @@ function App() {
       }
       return prev.filter(u => u.id !== id);
     });
-    
+
     // Clear input if there are no more uploads
     if (uploads.length <= 1) {
       setInput('');
@@ -373,15 +372,15 @@ function App() {
         console.error('Failed to copy text: ', err);
       }
     };
-  
-    const TooltipButton = ({ onClick, title, children }: { 
-      onClick?: () => void, 
-      title: string, 
-      children: React.ReactNode 
+
+    const TooltipButton = ({ onClick, title, children }: {
+      onClick?: () => void,
+      title: string,
+      children: React.ReactNode
     }) => (
       <div className="group relative">
-        <button 
-          onClick={onClick} 
+        <button
+          onClick={onClick}
           className="p-2 hover:bg-gray-200 rounded-full"
         >
           {children}
@@ -391,42 +390,53 @@ function App() {
         </div>
       </div>
     );
-  
+
     return (
       <div className="flex gap-0.5 mt-3">
         <TooltipButton title="Listen to this response">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-gray-500">
-            <path d="M11 5L6 9H2v6h4l5 4V5z"/>
-            <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
+          <svg
+            width="17"
+            height="17"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            className="text-gray-500"
+          >
+            <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
+            <path d="M15.54 8.46a5 5 0 0 1 0 7.07"></path>
+            <path d="M19.07 4.93a10 10 0 0 1 0 14.14"></path>
           </svg>
         </TooltipButton>
-  
-        <TooltipButton 
+
+        <TooltipButton
           title="Copy to clipboard"
           onClick={handleCopy}
         >
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-gray-500">
-            <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
-            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+            <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
           </svg>
         </TooltipButton>
-  
+
         <TooltipButton title="helpful">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-gray-500">
-            <path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3zM7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3"/>
+            <path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3zM7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3" />
           </svg>
         </TooltipButton>
-  
+
         <TooltipButton title="not helpful">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-gray-500">
-            <path d="M10 15v4a3 3 0 0 0 3 3l4-9V2H5.72a2 2 0 0 0-2 1.7l-1.38 9a2 2 0 0 0 2 2.3zm7-13h3a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2h-3"/>
+            <path d="M10 15v4a3 3 0 0 0 3 3l4-9V2H5.72a2 2 0 0 0-2 1.7l-1.38 9a2 2 0 0 0 2 2.3zm7-13h3a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2h-3" />
           </svg>
         </TooltipButton>
-  
+
         <TooltipButton title="Regenerate response">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-gray-500">
-            <path d="M23 4v6h-6"/>
-            <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
+            <path d="M23 4v6h-6" />
+            <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" />
           </svg>
         </TooltipButton>
       </div>
@@ -445,7 +455,7 @@ function App() {
       }
     }
   };
-  
+
   const headerVariants = {
     hidden: { opacity: 0, y: -20 },
     visible: {
@@ -454,17 +464,26 @@ function App() {
       transition: { duration: 0.5, ease: "easeOut" }
     }
   };
-  
+
   const messageVariants = {
     hidden: { opacity: 0, x: 0, scale: 0.5 },
     visible: {
       opacity: 1,
       x: 0,
       scale: 1,
-      transition: { duration: 0.3, ease: "easeOut" }
+      transition: { duration: 0.2, ease: "easeOut" }
     }
   };
-  
+
+
+  const streamingTokenVariants = {
+    hidden: { opacity: 0 },
+    visible: {
+      opacity: 1,
+      transition: { duration: 0.3 }
+    }
+  };
+
   const formVariants = {
     hidden: {
       opacity: 0,
@@ -474,7 +493,7 @@ function App() {
       opacity: 1,
       y: 0,
       transition: {
-        duration: 0.5,
+        duration: 1,
         ease: "easeOut"
       }
     }
@@ -515,12 +534,12 @@ function App() {
       return isWithinCodeBlock ? (
         <span className="block mb-2" {...props}>{children}</span>
       ) : (
-          <p className="p-0 m-0 mb-4 font-normal"
-              style={{ 
-                fontFamily: "'Afacad Flux', sans-serif",
-                lineHeight: '1.6',
-              }}
-            {...props}>{children}</p>
+        <p className="p-0 m-0 mb-4 font-normal"
+          style={{
+            fontFamily: "'Afacad Flux', sans-serif",
+            lineHeight: '1.6',
+          }}
+          {...props}>{children}</p>
       )
     },
     pre({ node, children, ...props }: { node: any, children: any }) {
@@ -541,7 +560,7 @@ function App() {
       )
     },
     h1: ({ node, children, ...props }: { node: any, children: any }) => (
-      <h1 
+      <h1
         className="text-2xl font-bold mb-4 mt-6 text-gray-800 pb-1"
         {...props}
       >
@@ -549,7 +568,7 @@ function App() {
       </h1>
     ),
     h2: ({ node, children, ...props }: { node: any, children: any }) => (
-      <h2 
+      <h2
         className="text-xl font-semibold mb-2 mt-5 text-gray-700"
         {...props}
       >
@@ -557,7 +576,7 @@ function App() {
       </h2>
     ),
     h3: ({ node, children, ...props }: { node: any, children: any }) => (
-      <h3 
+      <h3
         className="text-base font-medium mb-1 mt-4 text-gray-600"
         {...props}
       >
@@ -565,7 +584,7 @@ function App() {
       </h3>
     ),
     h4: ({ node, children, ...props }: { node: any, children: any }) => (
-      <h4 
+      <h4
         className="text-sm font-medium mb-1 mt-3 text-gray-600"
         {...props}
       >
@@ -573,7 +592,7 @@ function App() {
       </h4>
     ),
     h5: ({ node, children, ...props }: { node: any, children: any }) => (
-      <h5 
+      <h5
         className="text-sm font-medium mb-0 mt-2 text-gray-600"
         {...props}
       >
@@ -581,7 +600,7 @@ function App() {
       </h5>
     ),
     h6: ({ node, children, ...props }: { node: any, children: any }) => (
-      <h6 
+      <h6
         className="text-sm font-medium mb-0 mt-1 text-gray-600"
         {...props}
       >
@@ -591,7 +610,7 @@ function App() {
   }
 
   return (
-    <motion.div 
+    <motion.div
       className="flex flex-col h-screen bg-gray-100 text-gray-800"
       initial="hidden"
       animate="visible"
@@ -614,11 +633,10 @@ function App() {
       </style>
 
       {/* Side Panel */}
-      <div 
+      <div
         ref={sidePanelRef}
-        className={`fixed top-0 left-0 h-full bg-gray-200 transition-all duration-300 ease-in-out ${
-          showSidePanel ? 'w-64' : 'w-0'
-        } overflow-hidden z-50`}
+        className={`fixed top-0 left-0 h-full bg-gray-200 transition-all duration-300 ease-in-out ${showSidePanel ? 'w-64' : 'w-0'
+          } overflow-hidden z-50`}
       >
         <div className="p-4">
           <h2 className="text-xl font-bold mb-4 text-gray-800">Chat History</h2>
@@ -627,18 +645,17 @@ function App() {
       </div>
 
       {/* Header */}
-      <motion.header 
+      <motion.header
         variants={headerVariants}
-        className={`z-30 fixed top-0 left-0 right-0 bg-gradient-to-b from-gray-300 to-transparent p-4 text-center transition-transform duration-300 ease-in-out ${
-          showHeader && hasInteracted ? 'translate-y-0' : '-translate-y-full'
-        }`}
+        className={`z-30 fixed top-0 left-0 right-0 bg-gradient-to-b from-gray-300 to-transparent p-4 text-center transition-transform duration-300 ease-in-out ${showHeader && hasInteracted ? 'translate-y-0' : '-translate-y-full'
+          }`}
       >
         <h1 className="text-2xl font-bold">Gracii</h1>
       </motion.header>
-      
+
       {/* Showing Chat Interactive*/}
       <main className={`flex-1 overflow-hidden flex flex-col transition-transform duration-300 ${showHeader ? 'pt-16' : 'pt-0'}`}>
-        <div 
+        <div
           ref={chatContainerRef}
           className="flex-1 overflow-auto scrollbar-hide scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-gray-100 relative"
           style={{ height: '100vh' }}
@@ -647,7 +664,7 @@ function App() {
 
           {/* Greeting */}
           {!hasInteracted && (
-            <motion.div 
+            <motion.div
               className="flex items-center justify-center"
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
@@ -659,9 +676,9 @@ function App() {
                 `}
               </style>
               <div className="absolute top-3/4 left-1/2 transform -translate-x-1/2 -translate-y-1/2">
-                <h1 
+                <h1
                   className="text-6xl font-light text-gray-700"
-                  style={{ 
+                  style={{
                     fontFamily: "'Poppins', sans-serif",
                     opacity: animationComplete ? 1 : 0.7,
                     transition: 'opacity 0.5s ease-in-out'
@@ -675,7 +692,7 @@ function App() {
 
           {/* Overlay message fade */}
           <div className="fixed top-0 left-0 right-0 bottom-0 pointer-events-none z-20">
-            <div 
+            <div
               className="bg-gradient-to-b from-gray-100 via-transparent to-transparent"
               style={{ height: `${overlayHeight}px` }} // Use the overlayHeight state here
             ></div>
@@ -701,12 +718,11 @@ function App() {
                         </div>
                       </div>
                     )}
-                    <div 
-                      className={`p-2 ${
-                        message.role === 'user' 
-                          ? 'bg-gray-200 rounded-3xl max-w-lg shadow-sm px-4' 
-                          : 'bg-gray-100 max-w-full my-4 group/message p-2'
-                      }`}
+                    <div
+                      className={`p-2 ${message.role === 'user'
+                        ? 'bg-gray-200 rounded-3xl max-w-lg shadow-sm px-4'
+                        : 'bg-gray-100 max-w-full my-4 group/message p-2'
+                        }`}
                     >
                       <div className="flex flex-col gap-1">
                         {(message.toolUse || message.toolDone || message.isThinking) && (
@@ -715,19 +731,24 @@ function App() {
                           </div>
                         )}
                         {message.content && (
-                          <ReactMarkdown
-                            className="prose max-w-full space-y-4 prose-p:my-0 prose-pre:my-0"
-                            remarkPlugins={[remarkGfm]}
-                            components={customComponents}
+                          <motion.div
+                            initial="hidden"
+                            animate="visible"
+                            variants={streamingTokenVariants}
                           >
-                            {message.content.replace('END_TURN', '')}
-                          </ReactMarkdown>
+                            <ReactMarkdown
+                              className="prose max-w-full space-y-4 prose-p:my-0 prose-pre:my-0"
+                              remarkPlugins={[remarkGfm]}
+                              components={customComponents}
+                            >
+                              {message.content.replace('END_TURN', '')}
+                            </ReactMarkdown>
+                          </motion.div>
                         )}
                         {message.role === 'bot' && (message.content.includes('END_TURN') || !isStreaming) && (
-                          <div className={`${
-                            index === messages.length - 1 
-                              ? 'opacity-100' 
-                              : 'opacity-0 group-hover/message:opacity-100'
+                          <div className={`${index === messages.length - 1
+                            ? 'opacity-100'
+                            : 'opacity-0 group-hover/message:opacity-100'
                             } transition-opacity duration-200`}
                           >
                             <ActionButtons messageContent={message.content} />
@@ -745,8 +766,8 @@ function App() {
 
         {/* Chat Input */}
         <div className={`bg-gray-100 transition-all duration-300 ease-in-out ${hasInteracted ? '' : 'mb-20.5%'} relative z-30`}>
-          <motion.form 
-            onSubmit={handleSubmit} 
+          <motion.form
+            onSubmit={handleSubmit}
             className={`mx-auto duration-300 ease-in-out ${hasInteracted ? 'max-w-3xl' : 'max-w-2xl'}`}
             variants={formVariants}
           >
@@ -797,8 +818,8 @@ function App() {
                     className="w-[96%] px-4 py-3 bg-transparent text-gray-800 focus:outline-none resize-none scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-transparent"
                     disabled={isStreaming}
                     rows={1}
-                    style={{ 
-                      maxHeight: '150px', 
+                    style={{
+                      maxHeight: '150px',
                       overflowY: 'auto',
                       minHeight: '24px'
                     }}
@@ -808,11 +829,10 @@ function App() {
                 <button
                   type="submit"
                   disabled={!input.trim() && uploads.length === 0}
-                  className={`shrink-0 p-4 focus:outline-none self-end transition-opacity duration-200 ${
-                    !input.trim() && uploads.length === 0 ? 'opacity-40 cursor-not-allowed' : 'hover:text-gray-600'
-                  }`}
+                  className={`shrink-0 p-4 focus:outline-none self-end transition-opacity duration-200 ${!input.trim() && uploads.length === 0 ? 'opacity-40 cursor-not-allowed' : 'hover:text-gray-600'
+                    }`}
                 >
-                <Send className="w-5 h-5 pt-0.5 pr-0.5 text-gray-500 group-hover:text-white transition-colors duration-200" />
+                  <Send className="w-5 h-5 pt-0.5 pr-0.5 text-gray-500 group-hover:text-white transition-colors duration-200" />
                 </button>
               </div>
             </div>
