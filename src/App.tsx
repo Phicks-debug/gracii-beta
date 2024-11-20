@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback } from 'react'
+import React, { useState, useRef, useEffect, useCallback } from 'react'
 import { Send, Paperclip } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
@@ -76,6 +76,128 @@ const ToolUseIndicator = ({ isDone, isThinking }: { isDone?: boolean, isThinking
   )
 }
 
+
+const TypingInput = ({
+  value,
+  onChange,
+  onKeyDown,
+  placeholder,
+  disabled
+}: {
+  value: string;
+  onChange: (e: React.ChangeEvent<HTMLTextAreaElement>) => void;
+  onKeyDown: (e: React.KeyboardEvent<HTMLTextAreaElement>) => void;
+  placeholder: string;
+  disabled: boolean;
+}) => {
+  const [cursorPosition, setCursorPosition] = useState(0);
+  const [isActive, setIsActive] = useState(false);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const cursorRef = useRef<HTMLDivElement>(null);
+  const timeoutRef = useRef<NodeJS.Timeout>();
+
+  const resetTimer = () => {
+    if (timeoutRef.current) {
+      clearTimeout(timeoutRef.current);
+    }
+    setIsActive(true);
+    timeoutRef.current = setTimeout(() => {
+      setIsActive(false);
+    }, 2000);
+  };
+
+  useEffect(() => {
+    return () => {
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+      }
+    };
+  }, []);
+
+  const updateCursorPosition = () => {
+    if (textareaRef.current && cursorRef.current) {
+      const textarea = textareaRef.current;
+      const cursorPos = textarea.selectionStart || 0;
+
+      const styles = window.getComputedStyle(textarea);
+      const paddingLeft = parseInt(styles.paddingLeft);
+
+      const span = document.createElement('span');
+      span.style.cssText = `
+        font: ${styles.font};
+        letter-spacing: ${styles.letterSpacing};
+        position: absolute;
+        visibility: hidden;
+        white-space: pre;
+      `;
+
+      const textBeforeCursor = value
+        .substring(0, cursorPos)
+        .replace(/ /g, '\u00A0');
+
+      span.textContent = textBeforeCursor;
+      document.body.appendChild(span);
+
+      const cursorX = span.offsetWidth + paddingLeft;
+      document.body.removeChild(span);
+
+      // Apply transform with transition
+      cursorRef.current.style.transform = `translateX(${cursorX}px)`;
+      setCursorPosition(cursorPos);
+      resetTimer();
+    }
+  };
+
+  const handleInteraction = () => {
+    resetTimer();
+  };
+
+  useEffect(() => {
+    updateCursorPosition();
+  }, [value, cursorPosition]);
+
+  return (
+    <div className="typing-input-container relative">
+      <textarea
+        ref={textareaRef}
+        value={value}
+        onChange={(e) => {
+          onChange(e);
+          handleInteraction();
+        }}
+        onKeyDown={(e) => {
+          onKeyDown(e);
+          handleInteraction();
+        }}
+        onSelect={(e) => {
+          updateCursorPosition();
+          handleInteraction();
+        }}
+        onClick={(e) => {
+          updateCursorPosition();
+          handleInteraction();
+        }}
+        onMouseMove={handleInteraction}
+        placeholder={placeholder}
+        disabled={disabled}
+        className="w-full px-4 py-3 bg-transparent text-gray-800 focus:outline-none resize-none"
+        style={{
+          fontFamily: "'Inter', monospace",
+          caretColor: 'transparent',
+        }}
+      />
+      <div
+        ref={cursorRef}
+        className={`typing-cursor ${isActive ? 'cursor-visible' : 'cursor-hidden'}`}
+        style={{
+          top: '12px',
+          height: '18px'
+        }}
+      />
+    </div>
+  );
+};
+
 function App() {
   const [messages, setMessages] = useState<Message[]>([])
   const [input, setInput] = useState('')
@@ -95,6 +217,7 @@ function App() {
   const sidePanelRef = useRef<HTMLDivElement>(null)
   const lastScrollTop = useRef(0)
   const isScrollingRef = useRef(false)
+  const [cursorPosition, setCursorPosition] = useState(0);
 
   const [overlayHeight] = useState(150) // Default height in pixels
 
@@ -323,6 +446,11 @@ function App() {
     }
   };
 
+  const handleSelectionChange = (e: React.SyntheticEvent<HTMLTextAreaElement>) => {
+    const target = e.target as HTMLTextAreaElement;
+    setCursorPosition(target.selectionStart || 0);
+  };
+
   useEffect(() => {
     return () => {
       cleanupUploads();
@@ -535,10 +663,10 @@ function App() {
         <span className="block mb-2" {...props}>{children}</span>
       ) : (
         <p className="p-0 m-0 mb-4 font-normal"
-          style={{
-            fontFamily: "'Afacad Flux', sans-serif",
-            lineHeight: '1.6',
-          }}
+          // style={{
+          //   fontFamily: "'Afacad Flux', sans-serif",
+          //   lineHeight: '1.6',
+          // }}
           {...props}>{children}</p>
       )
     },
@@ -784,7 +912,7 @@ function App() {
                 </div>
               )}
               <div className="relative flex">
-                <div className="relative">
+                <div className="relative self-end">
                   <button
                     type="button"
                     onClick={() => setIsUploadMenuOpen(!isUploadMenuOpen)}
@@ -809,31 +937,25 @@ function App() {
                 />
 
                 <div className="flex-1 mb-0.5 min-h-[44px] flex flex-col justify-end">
-                  <textarea
-                    ref={textareaRef}
+                  <TypingInput
                     value={input}
                     onChange={(e) => setInput(e.target.value)}
                     onKeyDown={handleKeyDown}
                     placeholder="Tell something to Gracii..."
-                    className="w-[96%] px-4 py-3 bg-transparent text-gray-800 focus:outline-none resize-none scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-transparent"
                     disabled={isStreaming}
-                    rows={1}
-                    style={{
-                      maxHeight: '150px',
-                      overflowY: 'auto',
-                      minHeight: '24px'
-                    }}
                   />
                 </div>
 
-                <button
-                  type="submit"
-                  disabled={!input.trim() && uploads.length === 0}
-                  className={`shrink-0 p-4 focus:outline-none self-end transition-opacity duration-200 ${!input.trim() && uploads.length === 0 ? 'opacity-40 cursor-not-allowed' : 'hover:text-gray-600'
-                    }`}
-                >
-                  <Send className="w-5 h-5 pt-0.5 pr-0.5 text-gray-500 group-hover:text-white transition-colors duration-200" />
-                </button>
+                <div className='self-end'>
+                  <button
+                    type="submit"
+                    disabled={!input.trim() && uploads.length === 0}
+                    className={`shrink-0 p-4 focus:outline-none self-end transition-opacity duration-200 ${!input.trim() && uploads.length === 0 ? 'opacity-40 cursor-not-allowed' : 'hover:text-gray-600'
+                      }`}
+                  >
+                    <Send className="w-5 h-5 pt-0.5 pr-0.5 text-gray-500 group-hover:text-white transition-colors duration-200" />
+                  </button>
+                </div>
               </div>
             </div>
           </motion.form>
