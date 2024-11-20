@@ -138,9 +138,9 @@ async def search_stocks_by_groups(group: str = "VN30"):
         return f"Error searching stocks by group: {str(e)}"
     
 @Agent.tool(tool_retrieve_hr_policy)
-async def knowledge_base_retrieve(query: str):
+async def retrieve_hr_policy(query: str):
     kwargs = {
-        "knowledgeBaseId": "GFBFDZFDEZ",  # Insert your knowledge base ID
+        "knowledgeBaseId": "20GE0TB6RJ",  # Insert your knowledge base ID
         "retrievalConfiguration": {
             "vectorSearchConfiguration": {"numberOfResults": 25}
         },

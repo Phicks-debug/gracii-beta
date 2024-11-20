@@ -10,6 +10,7 @@ import tools
 
 from bedrock_llm import Agent, ModelName, StopReason
 from bedrock_llm.schema import MessageBlock
+from bedrock_llm.monitor import log_async, monitor_async
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
@@ -85,7 +86,7 @@ async def health_check():
 async def chat(history_id: str, request: MessageBlock):
     try:
         history = await manage_chat_history(history_id, request)
-        
+
         async def generate():
             try:
                 while True:
@@ -97,7 +98,9 @@ async def chat(history_id: str, request: MessageBlock):
                         prompt=history,
                         tools=["get_stock_price", 
                             "get_stock_intraday", 
-                            "search_stocks_by_groups"],
+                            "search_stocks_by_groups",
+                            "retrieve_hr_policy",
+                            ],
                     ):
                         if token:
                             yield token
@@ -114,11 +117,11 @@ async def chat(history_id: str, request: MessageBlock):
                             yield "DONE"
                     if stop_reason == StopReason.END_TURN:
                         break
-                    
+
             except Exception as e:
                 logger.error(f"Streaming error: {str(e)}")
                 yield f"Error: {str(e)}\n"
-                
+
         return StreamingResponse(
             generate(),
             media_type="text/event-stream",

@@ -1,9 +1,13 @@
+@import url('https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@400;500&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&display=swap');
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
+
 body {
   @apply bg-dark-gray text-white;
+  font-family: "Inter", monospace;
 }
 
 /* styles.css or index.css */
@@ -99,4 +103,63 @@ body {
 
 .animate-pulse {
   animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+@keyframes slideCursor {
+  0%, 100% {
+    border-left-color: transparent;
+  }
+  50% {
+    border-left-color: #000;
+  }
+}
+
+/* Remove the previous typing-input styles and replace with these: */
+.typing-input {
+  caret-color: transparent !important;
+  position: relative;
+  font-family: 'Inter', monospace;
+  letter-spacing: 0.05em;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.typing-input-container {
+  position: relative;
+  width: 100%;
+}
+
+.typing-cursor {
+  position: absolute;
+  width: 2px;
+  background-color: #000;
+  transition: transform 0.1s ease, opacity 0.3s ease;
+  pointer-events: none;
+  transform: translateX(0);
+}
+
+.cursor-visible {
+  opacity: 1;
+  animation: blink 0s infinite;
+}
+
+.cursor-hidden {
+  opacity: 0;
+  animation: none;
+}
+
+@keyframes blink {
+  0%, 100% { opacity: inherit; }
+  50% { opacity: 0; }
+}
+
+textarea {
+    font-size: 14px;
+    line-height: 1.5;
+    white-space: pre-wrap;
+  }
+
+.typing-input::selection {
+  background-color: rgba(255, 235, 59, 0.2);
 }
