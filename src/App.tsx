@@ -138,7 +138,7 @@ const TypingInput = ({
     const textarea = textareaRef.current;
     if (textarea) {
       textarea.style.height = "auto"; // Reset height to recalculate
-      textarea.style.height = `${Math.min(textarea.scrollHeight, 384)}px`; // Limit to max height
+      textarea.style.height = `${Math.min(textarea.scrollHeight, 208)}px`; // Limit to max height
     }
   };
 
@@ -217,7 +217,7 @@ const TypingInput = ({
         onMouseMove={handleInteraction}
         placeholder={placeholder}
         disabled={disabled}
-        className="w-full px-2 py-3 bg-transparent text-gray-800 focus:outline-none resize-none max-h-96 overflow-y-auto min-h-10"
+        className="w-full px-2 py-3 bg-transparent text-gray-800 focus:outline-none resize-none max-h-52 overflow-y-auto min-h-10"
         style={{
           fontFamily: "'Inter', monospace",
         }}
@@ -723,9 +723,10 @@ function App() {
   };
 
   const streamingTokenVariants = {
-    hidden: { opacity: 0 },
+    hidden: { opacity: 0, y: 10 },
     visible: {
       opacity: 1,
+      y: 0,
       transition: { duration: 0.3 },
     },
   };
@@ -1121,7 +1122,7 @@ function App() {
                   <button
                     type="submit"
                     disabled={!input.trim() && uploads.length === 0}
-                    className={`bg-[#000] text-white rounded-full shrink-0 mb-3 p-1 focus:outline-none self-end transition-opacity duration-200 ${
+                    className={`bg-[#000] text-white rounded-full shrink-0 ml-1 mb-3 p-1 focus:outline-none self-end transition-opacity duration-200 ${
                       !input.trim() && uploads.length === 0
                         ? "opacity-10 cursor-not-allowed"
                         : "hover:opacity-70"
