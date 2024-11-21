@@ -8,6 +8,7 @@ import uvicorn
 import logging
 import tools
 
+import multiprocessing
 from bedrock_llm import Agent, ModelName, StopReason
 from bedrock_llm.schema import MessageBlock
 
@@ -93,7 +94,8 @@ async def chat(history_id: str, request: MessageBlock):
                         tools=["get_stock_price", 
                             "get_stock_intraday", 
                             "search_stocks_by_groups",
-                            "retrieve_hr_policy"],
+                            "retrieve_hr_policy",
+                            "web_suff"],
                     ):
                         if token:
                             yield token
