@@ -217,20 +217,12 @@ const TypingInput = ({
         onMouseMove={handleInteraction}
         placeholder={placeholder}
         disabled={disabled}
-        className="w-full px-4 pt-3 bg-transparent text-gray-800 focus:outline-none resize-none max-h-52 overflow-y-auto min-h-10"
+        className="w-full px-4 pt-3 bg-transparent text-gray-800 focus:outline-none resize-none max-h-52 overflow-y-auto min-h-10 antialiased transition-all	"
         style={{
           fontFamily: "'Inter', monospace",
         }}
         rows={1}
       />
-      {/* <div
-        ref={cursorRef}
-        className={`typing-cursor ${isActive ? 'cursor-visible' : 'cursor-hidden'}`}
-        style={{
-          top: '12px',
-          height: '18px'
-        }}
-      /> */}
     </div>
   );
 };
