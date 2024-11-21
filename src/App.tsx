@@ -217,10 +217,11 @@ const TypingInput = ({
         onMouseMove={handleInteraction}
         placeholder={placeholder}
         disabled={disabled}
-        className="w-full px-2 py-3 bg-transparent text-gray-800 focus:outline-none resize-none max-h-52 overflow-y-auto min-h-10"
+        className="w-full px-4 pt-3 bg-transparent text-gray-800 focus:outline-none resize-none max-h-52 overflow-y-auto min-h-10"
         style={{
           fontFamily: "'Inter', monospace",
         }}
+        rows={1}
       />
       {/* <div
         ref={cursorRef}
@@ -1083,6 +1084,13 @@ function App() {
                   ))}
                 </div>
               )}
+              <TypingInput
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                onKeyDown={handleKeyDown}
+                placeholder="Tell something to Gracii..."
+                disabled={isStreaming}
+              />
               <div className="relative flex px-2">
                 <div className="relative self-end">
                   <button
@@ -1108,15 +1116,7 @@ function App() {
                   accept={Object.values(ACCEPTED_FILE_TYPES).join(",")}
                 />
 
-                <div className="flex-1 mb-0.5 min-h-[44px] flex flex-col justify-end">
-                  <TypingInput
-                    value={input}
-                    onChange={(e) => setInput(e.target.value)}
-                    onKeyDown={handleKeyDown}
-                    placeholder="Tell something to Gracii..."
-                    disabled={isStreaming}
-                  />
-                </div>
+                <div className="flex-1 mb-0.5 min-h-[44px] flex flex-col justify-end"></div>
 
                 <div className="self-end">
                   <button
