@@ -48,17 +48,16 @@ const ToolUseIndicator = ({
         onClick={() => setIsExpanded(!isExpanded)}
       >
         <span
-          className={`text-sm ${
-            isDone
-              ? "text-green-600 dark:text-green-400"
-              : "text-gray-500 dark:text-gray-400 animate-[pulse_0.8s_ease-in-out_infinite]"
-          }`}
+          className={`text-sm ${isDone
+            ? "text-green-600 dark:text-green-400"
+            : "text-gray-500 dark:text-gray-400 animate-[pulse_0.8s_ease-in-out_infinite]"
+            }`}
         >
           {isDone
             ? "✓ Tools used"
             : isThinking
-            ? `Thinking${dots}`
-            : `Using tools${dots}`}
+              ? `Thinking${dots}`
+              : `Using tools${dots}`}
         </span>
 
         <AnimatePresence>
@@ -220,6 +219,7 @@ const TypingInput = ({
         className="w-full px-4 pt-3 bg-transparent text-gray-800 focus:outline-none resize-none max-h-52 overflow-y-auto min-h-10"
         style={{
           fontFamily: "'Inter', monospace",
+          fontSize: "16px",
         }}
         rows={1}
       />
@@ -371,12 +371,12 @@ function App() {
                 prevMessages.map((msg) =>
                   msg.id === botMessageId
                     ? {
-                        ...msg,
-                        toolUse: true,
-                        toolDone: false,
-                        isThinking: false,
-                        content: text,
-                      }
+                      ...msg,
+                      toolUse: true,
+                      toolDone: false,
+                      isThinking: false,
+                      content: text,
+                    }
                     : msg
                 )
               );
@@ -389,12 +389,12 @@ function App() {
                 prevMessages.map((msg) =>
                   msg.id === botMessageId
                     ? {
-                        ...msg,
-                        toolUse: false,
-                        toolDone: false,
-                        isThinking: true,
-                        content: text,
-                      }
+                      ...msg,
+                      toolUse: false,
+                      toolDone: false,
+                      isThinking: true,
+                      content: text,
+                    }
                     : msg
                 )
               );
@@ -907,9 +907,8 @@ function App() {
       {/* Side Panel */}
       <div
         ref={sidePanelRef}
-        className={`fixed top-0 left-0 h-full bg-gray-200 transition-all duration-300 ease-in-out ${
-          showSidePanel ? "w-64" : "w-0"
-        } overflow-hidden z-50`}
+        className={`fixed top-0 left-0 h-full bg-gray-200 transition-all duration-300 ease-in-out ${showSidePanel ? "w-64" : "w-0"
+          } overflow-hidden z-50`}
       >
         <div className="p-4">
           <h2 className="text-xl font-bold mb-4 text-gray-800">Chat History</h2>
@@ -920,18 +919,16 @@ function App() {
       {/* Header */}
       <motion.header
         variants={headerVariants}
-        className={`z-30 fixed top-0 left-0 right-0 bg-gradient-to-b from-gray-300 to-transparent p-4 text-center transition-transform duration-300 ease-in-out ${
-          showHeader && hasInteracted ? "translate-y-0" : "-translate-y-full"
-        }`}
+        className={`z-30 fixed top-0 left-0 right-0 bg-gradient-to-b from-gray-300 to-transparent p-4 text-center transition-transform duration-300 ease-in-out ${showHeader && hasInteracted ? "translate-y-0" : "-translate-y-full"
+          }`}
       >
         <h1 className="text-2xl font-bold">Gracii</h1>
       </motion.header>
 
       {/* Showing Chat Interactive*/}
       <main
-        className={`flex-1 overflow-hidden flex flex-col transition-transform duration-300 ${
-          showHeader ? "pt-16" : "pt-0"
-        }`}
+        className={`flex-1 overflow-hidden flex flex-col transition-transform duration-300 ${showHeader ? "pt-16" : "pt-0"
+          }`}
       >
         <div
           ref={chatContainerRef}
@@ -981,18 +978,16 @@ function App() {
               {messages.map((message, index) => (
                 <motion.div
                   key={message.id}
-                  className={`flex items-start mb-4 ${
-                    message.role === "user" ? "justify-end" : "justify-start"
-                  }`}
+                  className={`flex items-start mb-4 ${message.role === "user" ? "justify-end" : "justify-start"
+                    }`}
                   variants={messageVariants}
                   initial="hidden"
                   animate="visible"
                   custom={index}
                 >
                   <div
-                    className={`flex items-start space-x-2 ${
-                      message.role === "user" ? "flex-row-reverse" : "flex-row"
-                    }`}
+                    className={`flex items-start space-x-2 ${message.role === "user" ? "flex-row-reverse" : "flex-row"
+                      }`}
                   >
                     {message.role === "bot" && (
                       <div className="p-2 rounded-full bg-gray-300 mt-4">
@@ -1004,23 +999,22 @@ function App() {
                       </div>
                     )}
                     <div
-                      className={`p-2 ${
-                        message.role === "user"
-                          ? "bg-gray-200 rounded-3xl max-w-lg shadow-sm px-4"
-                          : "bg-gray-100 max-w-full my-4 group/message p-2"
-                      }`}
+                      className={`p-2 ${message.role === "user"
+                        ? "bg-gray-200 rounded-3xl max-w-lg shadow-sm px-4"
+                        : "bg-gray-100 max-w-full my-4 group/message p-2"
+                        }`}
                     >
                       <div className="flex flex-col gap-1">
                         {(message.toolUse ||
                           message.toolDone ||
                           message.isThinking) && (
-                          <div className="mb-3">
-                            <ToolUseIndicator
-                              isDone={message.toolDone}
-                              isThinking={message.isThinking}
-                            />
-                          </div>
-                        )}
+                            <div className="mb-3">
+                              <ToolUseIndicator
+                                isDone={message.toolDone}
+                                isThinking={message.isThinking}
+                              />
+                            </div>
+                          )}
                         {message.content && (
                           <motion.div
                             initial="hidden"
@@ -1029,6 +1023,13 @@ function App() {
                           >
                             <ReactMarkdown
                               className="prose max-w-full space-y-4 prose-p:my-0 prose-pre:my-0"
+                              style={
+                                `
+                                .body{
+                                  font-size: 16px;
+                                }
+                                `
+                              }
                               remarkPlugins={[remarkGfm]}
                               components={customComponents}
                             >
@@ -1040,11 +1041,10 @@ function App() {
                           (message.content.includes("END_TURN") ||
                             !isStreaming) && (
                             <div
-                              className={`${
-                                index === messages.length - 1
-                                  ? "opacity-100"
-                                  : "opacity-0 group-hover/message:opacity-100"
-                              } transition-opacity duration-200`}
+                              className={`${index === messages.length - 1
+                                ? "opacity-100"
+                                : "opacity-0 group-hover/message:opacity-100"
+                                } transition-opacity duration-200`}
                             >
                               <ActionButtons messageContent={message.content} />
                             </div>
@@ -1061,15 +1061,13 @@ function App() {
 
         {/* Chat Input */}
         <div
-          className={`bg-gray-100 transition-all duration-300 ease-in-out ${
-            hasInteracted ? "" : "mb-20.5%"
-          } relative z-30`}
+          className={`bg-gray-100 transition-all duration-300 ease-in-out ${hasInteracted ? "" : "mb-20.5%"
+            } relative z-30`}
         >
           <motion.form
             onSubmit={handleSubmit}
-            className={`mx-auto duration-300 ease-in-out ${
-              hasInteracted ? "max-w-3xl" : "max-w-2xl"
-            }`}
+            className={`mx-auto duration-300 ease-in-out ${hasInteracted ? "max-w-3xl" : "max-w-2xl"
+              }`}
             variants={formVariants}
           >
             <div className="relative flex flex-col bg-white rounded-3xl shadow-md">
@@ -1122,11 +1120,10 @@ function App() {
                   <button
                     type="submit"
                     disabled={!input.trim() && uploads.length === 0}
-                    className={`bg-[#000] text-white rounded-full shrink-0 ml-1 mb-3 p-1 focus:outline-none self-end transition-opacity duration-200 ${
-                      !input.trim() && uploads.length === 0
-                        ? "opacity-10 cursor-not-allowed"
-                        : "hover:opacity-70"
-                    }`}
+                    className={`bg-[#000] text-white rounded-full shrink-0 ml-1 mb-3 p-1 focus:outline-none self-end transition-opacity duration-200 ${!input.trim() && uploads.length === 0
+                      ? "opacity-10 cursor-not-allowed"
+                      : "hover:opacity-70"
+                      }`}
                   >
                     <ArrowUp className="w-5 h-5" />
                   </button>

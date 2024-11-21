@@ -8,3 +8,4 @@ bedrock-llm==0.1.8.5
 jinja2==3.1.4
 requests==2.31.0
 vnstock3==3.1.0
+python-dotenv==1.0.1

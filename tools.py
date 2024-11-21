@@ -1,3 +1,4 @@
+import os
 import random
 import asyncio
 import boto3
@@ -9,11 +10,22 @@ from bedrock_llm import Agent
 from bedrock_llm.schema import ToolMetadata, InputSchema, PropertyAttr
 from bedrock_llm.monitor import monitor_async
 from vnstock3 import Vnstock
+from ogoogles import OGoogleS, SearchResult
 
+from dotenv import load_dotenv
+import google.generativeai as genai
 
+# Load environemnt variables
+load_dotenv()
 
 vnstock = Vnstock()
+searcher = OGoogleS()
 runtime = boto3.client("bedrock-agent-runtime", region_name="us-east-1")
+
+# Set up API
+genai.configure(api_key=os.environ.get("GOOGLE_API_KEY"))
+model = genai.GenerativeModel('gemini-1.5-flash')
+config = genai.GenerationConfig(max_output_tokens=2048)
 
 
 tool_get_stock_price = ToolMetadata(
@@ -89,6 +101,23 @@ tool_retrieve_hr_policy = ToolMetadata(
             "query": PropertyAttr(
                 type="string",
                 description="The query to retrieve the human resource policy.",
+            ),
+        },
+        required=["query"],
+    ),
+)
+
+
+web_browsing = ToolMetadata(
+    name="web_browsing",
+    description="""Use this tool to browse the web and retrieve information from internet.
+This tool is useful when you need to look up recent information that might not be included in the knowledge base. Use this tool for any search information on the internet that you need.""",
+    input_schema=InputSchema(
+        type="object",
+        properties={
+            "query": PropertyAttr(
+                type="string",
+                description="The query to search the web.",
             ),
         },
         required=["query"],
@@ -191,66 +220,89 @@ def iterate_through_location(location: dict):
                 return url
     return None
 
-
-async def web_browser_streaming(url: str):
-    async with aiohttp.ClientSession() as session:
-        async with session.get(url) as response:
-            async for chunk in response.content.iter_any():
-                yield chunk.decode('utf-8')
-
-
-from bedrock_llm import AsyncClient, ModelName
+@Agent.tool(web_browsing)
+async def web_browser(query: str):
+    return await searcher.search(
+        query=query,
+        max_results=10,
+        extract_text=False,
+        max_text_length=200
+    )
 
 # Usage example
 @monitor_async
-async def process_chunks(client, question: str, buffer_size: int = 8192):
+async def process_single_result(user_question: str, search_result: SearchResult):
+    """Process a single search result"""
     buffer = ""
-    found_answer = False
-    final_answer = ""
-
-    async for chunk in web_browser_streaming("https://finance.vietstock.vn/TCB-ngan-hang-tmcp-ky-thuong-viet-nam.htm"):    
-        buffer += chunk
-        
-        if len(buffer) >= buffer_size or "</div>" in buffer:
-            prompt = """<|begin_of_text|><|start_header_id|>user<|end_header_id|>
-Question: You are receiving a partial HTML page of a website, your job is to remove all the html tags like <body>, <p>, <div>, and
-extract any relevant information that might answer the question. If you find the answer, respond with "FOUND:" followed by the answer.
-If you don't find relevant information, just say "CONTINUE".
-Here is the partial HTML content:
-{content}
-Here is the question from the user:
-{question}
-
-<|eot_id|><|start_header_id|>assistant<|end_header_id|>
-""".format(content=buffer, question=question)
-
-            response_text = ""
-            async for token, stop_reason, response in client.generate_async(prompt=prompt):
-                if token:
-                    response_text += token
+    url = search_result.href
+    
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url) as response:
+                async for chunk in response.content.iter_chunked(8192):
+                    buffer += chunk.decode('utf-8', errors='ignore')
                     
-            if response_text.startswith("FOUND:"):
-                found_answer = True
-                final_answer = response_text[6:]  # Remove "FOUND:" prefix
-                print(f"\nFinal Answer: {final_answer}")
-                break
+                    if len(buffer) >= 8192 or "</div>" in buffer:
+                        prompt = f"""Question: Summarize and Extract relevant information from this HTML content that answers the question. Remove all HTML tags.
+HTML Content: 
+{buffer}
 
-            if response_text.startswith("CONTINUE"):
-                print(".", end="", flush=True)
-                
-            buffer = buffer[-1000:]  # Keep last 1000 characters for context
-        if found_answer:
-            break
+Question: 
+{user_question}
+"""
+                        response = await model.generate_content_async(
+                            contents=prompt,
+                            generation_config=config
+                        )
+                        
+                        return {
+                            "title": search_result.title,
+                            "url": search_result.href,
+                            "abstract": search_result.abstract,
+                            "summary": response.text
+                        }
+                    
+    except Exception as e:
+        return {
+            "title": search_result.title,
+            "url": search_result.href, 
+            "abstract": search_result.abstract,
+            "summary": f"Error processing URL: {str(e)}"
+        }
+
+@monitor_async
+async def process_search_results(question: str, search_results: list[SearchResult]):
+    """Process multiple search results concurrently using as_completed"""
+    tasks = [
+        process_single_result(question, result) 
+        for result in search_results
+    ]
+    
+    results = []
+    for coro in asyncio.as_completed(tasks):
+        try:
+            result = await coro
+            results.append(result)
+            # Print result as soon as it's available
+            print(f"\nProcessed Result:")
+            print(f"Title: {result['title']}")
+            print(f"URL: {result['url']}")
+            print(f"Summary: {result['summary']}")
+            print("-" * 80)
+        except Exception as e:
+            print(f"Error processing result: {str(e)}")
+    
+    return results
 
 async def main():
-    client = AsyncClient(
-        region_name="us-east-1",
-        model_name=ModelName.LLAMA_3_2_1B
-    )
-    
     question = "Giá hiện tại của TCB?"
-    await process_chunks(client, question)
-
+    search_results = await web_browser(question)
+    
+    # Process results concurrently
+    summaries = await process_search_results(question, search_results)
+    
+    print("\nAll results processed!")
+    print(f"Total results: {len(summaries)}")
 
 if __name__ == "__main__":
     asyncio.run(main())
