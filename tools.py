@@ -1,12 +1,15 @@
 import random
 import asyncio
 import boto3
+import aiohttp
 import xml.etree.ElementTree as ET
 
 from datetime import date
 from bedrock_llm import Agent
 from bedrock_llm.schema import ToolMetadata, InputSchema, PropertyAttr
+from bedrock_llm.monitor import monitor_async
 from vnstock3 import Vnstock
+
 
 
 vnstock = Vnstock()
@@ -187,3 +190,67 @@ def iterate_through_location(location: dict):
             if url:
                 return url
     return None
+
+
+async def web_browser_streaming(url: str):
+    async with aiohttp.ClientSession() as session:
+        async with session.get(url) as response:
+            async for chunk in response.content.iter_any():
+                yield chunk.decode('utf-8')
+
+
+from bedrock_llm import AsyncClient, ModelName
+
+# Usage example
+@monitor_async
+async def process_chunks(client, question: str, buffer_size: int = 8192):
+    buffer = ""
+    found_answer = False
+    final_answer = ""
+
+    async for chunk in web_browser_streaming("https://finance.vietstock.vn/TCB-ngan-hang-tmcp-ky-thuong-viet-nam.htm"):    
+        buffer += chunk
+        
+        if len(buffer) >= buffer_size or "</div>" in buffer:
+            prompt = """<|begin_of_text|><|start_header_id|>user<|end_header_id|>
+Question: You are receiving a partial HTML page of a website, your job is to remove all the html tags like <body>, <p>, <div>, and
+extract any relevant information that might answer the question. If you find the answer, respond with "FOUND:" followed by the stuctured html page that contain the answer.
+If you don't find relevant information, just say "CONTINUE".
+Here is the partial HTML content:
+{content}
+Here is the question from the user:
+{question}
+
+<|eot_id|><|start_header_id|>assistant<|end_header_id|>
+""".format(content=buffer, question=question)
+
+            response_text = ""
+            async for token, stop_reason, response in client.generate_async(prompt=prompt):
+                if token:
+                    response_text += token
+                    
+            if response_text.startswith("FOUND:"):
+                found_answer = True
+                final_answer = response_text[6:]  # Remove "FOUND:" prefix
+                print(f"\nFinal Answer: {final_answer}")
+                break
+
+            if response_text.startswith("CONTINUE"):
+                print(".", end="", flush=True)
+                
+            buffer = buffer[-1000:]  # Keep last 1000 characters for context
+        if found_answer:
+            break
+
+async def main():
+    client = AsyncClient(
+        region_name="us-east-1",
+        model_name=ModelName.LLAMA_3_2_1B
+    )
+    
+    question = "Giá hiện tại của TCB?"
+    await process_chunks(client, question)
+
+
+if __name__ == "__main__":
+    asyncio.run(main())
