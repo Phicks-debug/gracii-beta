@@ -3,7 +3,7 @@ from fastapi.responses import StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 from typing import List, Dict
-from datetime import datetime
+from datetime import datetime, timedelta
 import uvicorn
 import logging
 import tools
@@ -89,6 +89,7 @@ async def chat(history_id: str, request: MessageBlock):
                             tool_result
                     ) in agent.generate_and_action_async(
                         prompt=history,
+                        system=f"You have realtime access. Current time is: {(datetime.now() + timedelta(hours=7)).strftime('%Y-%m-%d %H:%M:%S')}",
                         tools=["get_stock_price", 
                             "get_stock_intraday", 
                             "search_stocks_by_groups",

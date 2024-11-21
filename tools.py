@@ -214,7 +214,7 @@ async def process_chunks(client, question: str, buffer_size: int = 8192):
         if len(buffer) >= buffer_size or "</div>" in buffer:
             prompt = """<|begin_of_text|><|start_header_id|>user<|end_header_id|>
 Question: You are receiving a partial HTML page of a website, your job is to remove all the html tags like <body>, <p>, <div>, and
-extract any relevant information that might answer the question. If you find the answer, respond with "FOUND:" followed by the stuctured html page that contain the answer.
+extract any relevant information that might answer the question. If you find the answer, respond with "FOUND:" followed by the answer.
 If you don't find relevant information, just say "CONTINUE".
 Here is the partial HTML content:
 {content}
