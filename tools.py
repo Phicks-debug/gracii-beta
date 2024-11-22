@@ -147,6 +147,22 @@ tool_retrieve_hr_policy = ToolMetadata(
 )
 
 
+tool_retrieve_office365_document = ToolMetadata(
+    name="retrieve_office365_document",
+    description="Use this tool to retrieve information on Office365 documents.",
+    input_schema=InputSchema(
+        type="object",
+        properties={
+            "query": PropertyAttr(
+                type="string",
+                description="The query to retrieve the Office365 document.",
+            ),
+        },
+        required=["query"],
+    ),
+)
+
+
 tool_web_suffing = ToolMetadata(
     name="web_suffing",
     description="""Use this tool to browse the web and retrieve information from internet.
@@ -308,6 +324,20 @@ async def search_stocks_by_groups(group: str = "VN30"):
 async def retrieve_hr_policy(query: str):
     kwargs = {
         "knowledgeBaseId": "20GE0TB6RJ",  # Insert your knowledge base ID
+        "retrievalConfiguration": {
+            "vectorSearchConfiguration": {"numberOfResults": 25}
+        },
+        "retrievalQuery": {"text": query},
+    }
+
+    # Run boto3 call in a thread pool since it's blocking
+    result = runtime.retrieve(**kwargs)
+    return build_context_kb_prompt(result)
+
+@Agent.tool(tool_retrieve_office365_document)
+async def retrieve_office365_documentd(query: str):
+    kwargs = {
+        "knowledgeBaseId": "OC9MWRVCVM",  # Insert your knowledge base ID
         "retrievalConfiguration": {
             "vectorSearchConfiguration": {"numberOfResults": 25}
         },

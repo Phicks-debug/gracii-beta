@@ -10,16 +10,18 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@types/react": "^18.0.0",
+    "@types/react-dom": "^18.0.0",
+    "@types/uuid": "^9.0.8",
     "axios": "^1.7.7",
+    "framer-motion": "^11.11.17",
     "lucide-react": "^0.344.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "react-markdown": "^9.0.1",
     "remark-gfm": "^4.0.0",
     "tailwind-scrollbar": "^3.1.0",
-    "uuid": "^9.0.1",
-    "@types/uuid": "^9.0.8",
-    "framer-motion": "^11.11.17"
+    "uuid": "^9.0.1"
   },
   "devDependencies": {
     "@eslint/js": "^9.9.1",

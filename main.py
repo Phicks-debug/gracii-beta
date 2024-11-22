@@ -59,22 +59,22 @@ app.add_middleware(
 chat_history_store: Dict[str, List[MessageBlock]] = {}
 
 # Add a helper function to manage chat history
-async def manage_chat_history(history_id: str, message: MessageBlock) -> List[MessageBlock]:
-    if history_id not in chat_history_store:
-        chat_history_store[history_id] = []
+async def manage_chat_history(conversation_id: str, message: MessageBlock) -> List[MessageBlock]:
+    if conversation_id not in chat_history_store:
+        chat_history_store[conversation_id] = []
     
     # Ensure proper message structure
     if not hasattr(message, 'role'):
         message.role = 'user'
     
-    chat_history_store[history_id].append(message)
+    chat_history_store[conversation_id].append(message)
     
     # Optionally limit history length to prevent token limits
     max_history = 16  # Adjust as needed
-    if len(chat_history_store[history_id]) > max_history:
-        chat_history_store[history_id] = chat_history_store[history_id][-max_history-1:]
+    if len(chat_history_store[conversation_id]) > max_history:
+        chat_history_store[conversation_id] = chat_history_store[conversation_id][-max_history-1:]
     
-    return chat_history_store[history_id]
+    return chat_history_store[conversation_id]
 
 
 @app.get("/")
@@ -83,10 +83,10 @@ async def root():
     return {"status": "API is running", "timestamp": datetime.now().isoformat()}
 
 
-@app.post("/chat/{history_id}")
-async def chat(history_id: str, request: MessageBlock):
+@app.post("/chat/{conversation_id}")
+async def chat(conversation_id: str, request: MessageBlock):
     try:
-        history = await manage_chat_history(history_id, request)
+        history = await manage_chat_history(conversation_id, request)
 
         async def generate():
             try:
@@ -102,7 +102,7 @@ async def chat(history_id: str, request: MessageBlock):
                             "get_stock_intraday",
                             "search_stocks_by_groups",
                             "retrieve_hr_policy",
-                            "retrieve_it_help_desk",
+                            "retrieve_office365_document",
                             "web_suffing",
                             "send_email",
                             "raise_problems_to_IT"],
@@ -111,14 +111,14 @@ async def chat(history_id: str, request: MessageBlock):
                             yield token
                         if stop_reason == StopReason.END_TURN:
                             yield stop_reason.name
-                            await manage_chat_history(history_id, response)
+                            await manage_chat_history(conversation_id, response)
                             break
                         elif stop_reason == StopReason.TOOL_USE:
                             yield stop_reason.name
-                            await manage_chat_history(history_id, response)
+                            await manage_chat_history(conversation_id, response)
                         if tool_result:
                             message = MessageBlock(role='user', content=tool_result)
-                            await manage_chat_history(history_id, message)
+                            await manage_chat_history(conversation_id, message)
                             yield "DONE"
                     if stop_reason == StopReason.END_TURN:
                         break
