@@ -1,6 +1,6 @@
 # Tên image và tag
 IMAGE_NAME = gracii
-TAG = 1.0.0
+TAG = 2.0.0
 REGION = ap-southeast-1
 ACCOUNT_ID = 130506138320
 ECR_REGISTRY = $(ACCOUNT_ID).dkr.ecr.$(REGION).amazonaws.com
