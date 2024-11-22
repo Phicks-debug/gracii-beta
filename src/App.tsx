@@ -184,26 +184,24 @@ function App() {
               continue;
             }
 
-            if (!chunk.includes("END_TURN")) {
-              text += chunk;
-              setMessages((prevMessages) =>
-                prevMessages.map((msg) => {
-                  if (msg.id === botMessageId) {
-                    // If we were thinking and got a new token, mark as done
-                    if (msg.isThinking) {
-                      return {
-                        ...msg,
-                        toolDone: true,
-                        isThinking: false,
-                        content: text,
-                      };
-                    }
-                    return { ...msg, content: text };
+            text += chunk;
+            setMessages((prevMessages) =>
+              prevMessages.map((msg) => {
+                if (msg.id === botMessageId) {
+                  // If we were thinking and got a new token, mark as done
+                  if (msg.isThinking) {
+                    return {
+                      ...msg,
+                      toolDone: true,
+                      isThinking: false,
+                      content: text,
+                    };
                   }
-                  return msg;
-                })
-              );
-            }
+                  return { ...msg, content: text };
+                }
+                return msg;
+              })
+            );
           }
         }
       } catch (error) {

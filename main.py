@@ -1,6 +1,6 @@
 import aiohttp
 import aiofiles
-from fastapi import FastAPI, HTTPException, Form, Request
+from fastapi import FastAPI, HTTPException, Form
 from fastapi.responses import StreamingResponse, RedirectResponse
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
@@ -12,7 +12,8 @@ import tools
 import httpx
 import os
 
-from bedrock_llm import Agent, ModelName, StopReason
+from jinja2 import Environment, FileSystemLoader
+from bedrock_llm import Agent, ModelName, StopReason, ModelConfig
 from bedrock_llm.schema import MessageBlock
 from dotenv import load_dotenv
 load_dotenv()
@@ -22,14 +23,34 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 tokens = {}
+main_region = os.environ.get("MAIN_MODEL_REGION")
+main_temp = os.environ.get("MAIN_MODEL_TEMP")
+main_topk = os.environ.get("MAIN_MODEL_TOP_K")
+main_topp = os.environ.get("MAIN_MODEL_TOP_P")
+main_mxtk = os.environ.get("MAIN_MODEL_MAXTK")
 
+main_config = ModelConfig(
+    temperature=float(main_temp),
+    top_k=main_topk,
+    top_p=float(main_topp),
+    max_tokens=main_mxtk,
+)
+
+# Configure the Jinja2 environment
+TEMPLATE_FOLDER = os.path.join(os.path.dirname(__file__), "prompt_templates")
+jinja_env = Environment(loader=FileSystemLoader(TEMPLATE_FOLDER))
+
+# Function to render a Jinja2 template
+def render_template(template_name: str, context: dict) -> str:
+    template = jinja_env.get_template(template_name)
+    return template.render(context)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Initialize the agent when the server starts
     global agent
     agent = Agent(
-        region_name="us-east-1",
+        region_name=main_region,
         model_name=ModelName.CLAUDE_3_5_SONNET,
         auto_update_memory=False,
     ) 
@@ -97,7 +118,9 @@ async def chat(conversation_id: str, request: MessageBlock):
                             tool_result
                     ) in agent.generate_and_action_async(
                         prompt=history,
-                        system=f"You have realtime access. Current time is: {(datetime.now() + timedelta(hours=7)).strftime('%Y-%m-%d %H:%M:%S')}",
+                        system=render_template("main.j2", {
+                            "current_date": (datetime.now() + timedelta(hours=7)).strftime('%Y-%m-%d %H:%M:%S')
+                        }),
                         tools=["get_stock_price",
                             "get_stock_intraday",
                             "search_stocks_by_groups",
@@ -106,12 +129,14 @@ async def chat(conversation_id: str, request: MessageBlock):
                             "web_suffing",
                             "send_email",
                             "raise_problems_to_IT"],
+                        config=main_config,
                     ):
                         if token:
                             yield token
                         if stop_reason == StopReason.END_TURN:
                             yield stop_reason.name
                             await manage_chat_history(conversation_id, response)
+                            logger.info(f"Response: {response}")
                             break
                         elif stop_reason == StopReason.TOOL_USE:
                             yield stop_reason.name

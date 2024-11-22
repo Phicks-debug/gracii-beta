@@ -38,9 +38,13 @@ from typing import List
 load_dotenv()
 genai.configure(api_key=os.environ.get("GOOGLE_API_KEY"))
 
+hrKbID = os.environ.get("HR_KNOWLEDEG_BASE_ID")
+officeKbID = os.environ.get("365OFFICE_KNOWLEDEG_BASE_ID")
+summary_m_region = os.environ.get("SUMMARY_MODEL_REGION")
+
 vnstock = Vnstock()
 searcher = OGoogleS()
-runtime = boto3.client("bedrock-agent-runtime", region_name="us-east-1")
+runtime = boto3.client("bedrock-agent-runtime", region_name=os.environ.get("KNOWLEDGE_BASE_REGION"))
 critic_model = genai.GenerativeModel(
     "gemini-1.5-flash-002",
     system_instruction="""You are the browser critic, you task is to based on the search results to decide which website, 
@@ -52,9 +56,10 @@ Return the summarizatino for all the links if no need to investigate futher link
 
 
 config = ModelConfig(
-    temperature=0.4,
-    top_p=0.9,
-    max_tokens=2048
+    temperature=os.environ.get("SUMMARY_MODEL_TEMP"),
+    top_p=os.environ.get("SUMMARY_MODEL_TOP_P"),
+    top_k=os.environ.get("SUMMARY_MODEL_TOP_K"),
+    max_tokens=os.environ.get("SUMMARY_MODEL_MAXTK")
 )
 # Configure logging for the main process
 logging.basicConfig(
@@ -323,7 +328,7 @@ async def search_stocks_by_groups(group: str = "VN30"):
 @Agent.tool(tool_retrieve_hr_policy)
 async def retrieve_hr_policy(query: str):
     kwargs = {
-        "knowledgeBaseId": "20GE0TB6RJ",  # Insert your knowledge base ID
+        "knowledgeBaseId": hrKbID,  # Insert your knowledge base ID
         "retrievalConfiguration": {
             "vectorSearchConfiguration": {"numberOfResults": 25}
         },
@@ -337,7 +342,7 @@ async def retrieve_hr_policy(query: str):
 @Agent.tool(tool_retrieve_office365_document)
 async def retrieve_office365_documentd(query: str):
     kwargs = {
-        "knowledgeBaseId": "OC9MWRVCVM",  # Insert your knowledge base ID
+        "knowledgeBaseId": officeKbID,  # Insert your knowledge base ID
         "retrievalConfiguration": {
             "vectorSearchConfiguration": {"numberOfResults": 25}
         },
@@ -395,7 +400,7 @@ async def web_browser(query: str):
 
 async def init_bedrock_client():
     client = AsyncClient(
-        region_name="us-east-1",
+        region_name=summary_m_region,
         model_name=ModelName.CLAUDE_3_HAIKU
     )
     await client._get_async_client()  # Initialize the async client
@@ -582,9 +587,9 @@ async def web_suffing(query: str):
         formatted_summaries = []
         for summary in summaries:
             formatted_summary = f"""
-Title: {summary['title']}
-URL: {summary['url']}
-Summary: {summary['summary']}
+<title>{summary['title']}</title>
+<url>{summary['url']}</url>
+<summary>{summary['summary']}</summary>
 -------------------
 """
             formatted_summaries.append(formatted_summary)
@@ -653,9 +658,9 @@ async def raise_problems_to_IT(problem: str, sender_name: str, sender_role: str,
         # Create an aioboto3 session
         session = aioboto3.Session()
         
-        async with session.client('dynamodb', region_name=os.environ.get('AWS_REGION', 'us-east-1')) as client:
+        async with session.client('dynamodb', region_name=os.environ.get('DYNAMO_DB_TICKET_TABLE_REGION', 'us-east-1')) as client:
             response = await client.put_item(
-                TableName="IT_Support_Tickets",
+                TableName=os.environ.get("DYNAMO_DB_TICKET_TABLE_NAME"),
                 Item=ticket_data
             )
             
