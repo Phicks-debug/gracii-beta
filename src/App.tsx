@@ -137,7 +137,11 @@ const TypingInput = ({
     const textarea = textareaRef.current;
     if (textarea) {
       textarea.style.height = "auto"; // Reset height to recalculate
-      textarea.style.height = `${Math.min(textarea.scrollHeight, 208)}px`; // Limit to max height
+      const newHeight = Math.min(textarea.scrollHeight, 208); // Limit to max height
+      textarea.style.height = `${newHeight}px`;
+
+      // Add overflow-y when content exceeds max height
+      textarea.style.overflowY = textarea.scrollHeight > 208 ? 'auto' : 'hidden';
     }
   };
 
@@ -192,7 +196,7 @@ const TypingInput = ({
   }, [value, cursorPosition]);
 
   return (
-    <div className="typing-input-container relative">
+    <div className="typing-input-container relative max-h-52 overflow-hidden"> {/* Add these classes */}
       <textarea
         ref={textareaRef}
         value={value}
@@ -220,6 +224,8 @@ const TypingInput = ({
         style={{
           fontFamily: "'Inter', monospace",
           fontSize: "16px",
+          overflowY: 'auto',
+          maxHeight: '208px',
         }}
         rows={1}
       />
@@ -794,7 +800,7 @@ function App() {
       ) : (
         <a
           href={href}
-          className="text-blue-500 hover:underline font-medium"
+          className="text-cyan-500 hover:underline font-medium"
           target="_blank"
           rel="noopener noreferrer"
           {...props}
@@ -811,11 +817,12 @@ function App() {
         </span>
       ) : (
         <p
-          className="p-0 m-0 mb-4 font-normal"
-          // style={{
-          //   fontFamily: "'Afacad Flux', sans-serif",
-          //   lineHeight: '1.6',
-          // }}
+          className="p-0 m-0 font-normal"
+          style={{
+            // fontFamily: "'Afacad Flux', sans-serif",
+            // lineHeight: '1.6',
+            fontSize: 16
+          }}
           {...props}
         >
           {children}
@@ -832,7 +839,7 @@ function App() {
     li({ node, children, ...props }: { node: any; children: any }) {
       return (
         <li
-          className="mb-1 mt-0 p-0 font-normal" // Added margin bottom to list items
+          className="font-normal text-pretty" // Added margin bottom to list items
           {...props}
         >
           {children}
@@ -1018,7 +1025,7 @@ function App() {
                               style={
                                 `
                                 .body{
-                                  font-size: 16px;
+                                  font-size: 14px;
                                 }
                                 `
                               }
@@ -1086,9 +1093,9 @@ function App() {
                   <button
                     type="button"
                     onClick={() => setIsUploadMenuOpen(!isUploadMenuOpen)}
-                    className="shrink-0 p-1 text-gray-500 hover:text-gray-700 focus:outline-none self-end mb-3"
+                    className="shrink-0 p-1 text-gray-500 hover:text-gray-700 focus:outline-none self-end mb-2 ml-1"
                   >
-                    <Paperclip className="w-5 h-5" />
+                    <Paperclip className="w-6 h-6" />
                   </button>
 
                   <AnimatePresence>
@@ -1112,12 +1119,12 @@ function App() {
                   <button
                     type="submit"
                     disabled={!input.trim() && uploads.length === 0}
-                    className={`bg-[#000] text-white rounded-full shrink-0 ml-1 mb-3 p-1 focus:outline-none self-end transition-opacity duration-200 ${!input.trim() && uploads.length === 0
+                    className={`bg-[#000] text-white rounded-full shrink-0 ml-1 mb-2 p-1 focus:outline-none self-end transition-opacity duration-200 ${!input.trim() && uploads.length === 0
                       ? "opacity-10 cursor-not-allowed"
                       : "hover:opacity-70"
                       }`}
                   >
-                    <ArrowUp className="w-5 h-5" />
+                    <ArrowUp className="w-6 h-6" />
                   </button>
                 </div>
               </div>
