@@ -14,7 +14,7 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy package files and install Node dependencies
+# Copy package files and install Node dependencies 
 COPY package*.json ./
 RUN npm install
 
@@ -25,5 +25,12 @@ COPY . .
 EXPOSE 8000
 EXPOSE 5173
 
+VOLUME [".:/app", "/app/node_modules"]
+
+ENV AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+ENV AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+ENV AWS_DEFAULT_REGION=${AWS_DEFAULT_REGION}
+
 # The actual command will be overridden by docker-compose.yml
 CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
+
