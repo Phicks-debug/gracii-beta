@@ -13,6 +13,6 @@ grpcio==1.68.0
 grpcio-tools==1.68.0
 google-generativeai==0.8.3
 webscout
-arcade-ai[fastapi]
+# arcade-ai[fastapi]
 aiofiles==24.1.0
 groq==0.12.0
