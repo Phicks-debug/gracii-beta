@@ -1,20 +1,22 @@
+
 import aiohttp
 import aiofiles
+from asyncio import Event, create_task, gather
 from fastapi import FastAPI, HTTPException, Form
 from fastapi.responses import StreamingResponse, RedirectResponse
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
-from typing import List, Dict
+from typing import List, Dict, Optional
 from datetime import datetime, timedelta
 import uvicorn
 import logging
 import tools
-import httpx
 import os
 
-from jinja2 import Environment, FileSystemLoader
+from utils import render_template
 from bedrock_llm import Agent, ModelName, StopReason, ModelConfig
 from bedrock_llm.schema import MessageBlock
+from groq import AsyncGroq
 from dotenv import load_dotenv
 load_dotenv()
 
@@ -28,6 +30,7 @@ main_temp = os.environ.get("MAIN_MODEL_TEMP")
 main_topk = os.environ.get("MAIN_MODEL_TOP_K")
 main_topp = os.environ.get("MAIN_MODEL_TOP_P")
 main_mxtk = os.environ.get("MAIN_MODEL_MAXTK")
+groq_api_key = os.environ.get("GROQ_API_KEY")
 
 main_config = ModelConfig(
     temperature=float(main_temp),
@@ -36,14 +39,6 @@ main_config = ModelConfig(
     max_tokens=main_mxtk,
 )
 
-# Configure the Jinja2 environment
-TEMPLATE_FOLDER = os.path.join(os.path.dirname(__file__), "prompt_templates")
-jinja_env = Environment(loader=FileSystemLoader(TEMPLATE_FOLDER))
-
-# Function to render a Jinja2 template
-def render_template(template_name: str, context: dict) -> str:
-    template = jinja_env.get_template(template_name)
-    return template.render(context)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -98,16 +93,52 @@ async def manage_chat_history(conversation_id: str, message: MessageBlock) -> Li
     return chat_history_store[conversation_id]
 
 
+async def delete_chat_history(conversation_id: str, position: Optional[int]=None):
+    if conversation_id in chat_history_store and not position:
+        chat_history_store[conversation_id].clear()
+    else:
+        chat_history_store[conversation_id].pop(position)
+
+
 @app.get("/")
 async def root():
     """Root endpoint to check if API is running"""
-    return {"status": "API is running", "timestamp": datetime.now().isoformat()}
+    return {"status": "API is running", "timestamp": (datetime.now() + timedelta(hours=7)).isoformat()}
 
 
 @app.post("/chat/{conversation_id}")
 async def chat(conversation_id: str, request: MessageBlock):
     try:
         history = await manage_chat_history(conversation_id, request)
+
+        stop_event = Event()
+
+        async def validate_and_control():
+            async with AsyncGroq(
+                api_key=groq_api_key,
+            ) as guard_model:
+                completion = await guard_model.chat.completions.create(
+                    model="llama-3.2-11b-text-preview",
+                    messages=[
+                        {
+                            "role": "user",
+                            "content": render_template("guardrail.j2", {
+                                "input": request.content,
+                            })
+                        }
+                    ],
+                    temperature=0,
+                    max_tokens=1024,
+                    top_p=1,
+                    stream=False,
+                    stop=None,
+                )
+            if completion.choices[0].message.content.strip() == "NOT OK":
+                stop_event.set()
+                await delete_chat_history(conversation_id, -1)
+                logger.info(history)
+                return False, "Your input contain potential harmful content or violated our policy, and has been blocked for safety reasons."
+            return True, None
 
         async def generate():
             try:
@@ -131,6 +162,10 @@ async def chat(conversation_id: str, request: MessageBlock):
                             "raise_problems_to_IT"],
                         config=main_config,
                     ):
+                        # Check for any stop from guardrail
+                        if stop_event.is_set():
+                            return
+
                         if token:
                             yield token
                         if stop_reason == StopReason.END_TURN:
@@ -141,9 +176,11 @@ async def chat(conversation_id: str, request: MessageBlock):
                         elif stop_reason == StopReason.TOOL_USE:
                             yield stop_reason.name
                             await manage_chat_history(conversation_id, response)
+                            logger.info(f"Response: {response}")
                         if tool_result:
                             message = MessageBlock(role='user', content=tool_result)
                             await manage_chat_history(conversation_id, message)
+                            logger.info(f"Tool result: {tool_result}")
                             yield "DONE"
                     if stop_reason == StopReason.END_TURN:
                         break
@@ -152,8 +189,18 @@ async def chat(conversation_id: str, request: MessageBlock):
                 logger.error(f"Streaming error: {str(e)}")
                 yield f"Error: {str(e)}\n"
 
+        async def invoke_model():
+            is_safe, error_message = await validate_and_control()
+            if not is_safe:
+                yield "INVALID_INPUT"
+                yield error_message
+                return
+
+            async for token in generate():
+                yield token
+
         return StreamingResponse(
-            generate(),
+            invoke_model(),
             media_type="text/event-stream",
             headers={
                 "Cache-Control": "no-cache",

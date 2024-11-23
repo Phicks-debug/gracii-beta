@@ -1,4 +1,5 @@
 
+import json
 import uuid
 import os
 import main
@@ -6,7 +7,6 @@ import logging
 import random
 import asyncio
 import requests
-from re import M
 import boto3
 import aioboto3
 import aiohttp
@@ -14,9 +14,7 @@ import xml.etree.ElementTree as ET
 import concurrent.futures
 import multiprocessing
 
-
-from datetime import date
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from bedrock_llm import Agent
 from bedrock_llm.schema import ToolMetadata, InputSchema, PropertyAttr
 from bedrock_llm.monitor import monitor_async
@@ -25,8 +23,8 @@ from ogoogles import OGoogleS, SearchResult
 from concurrent.futures import ProcessPoolExecutor
 from functools import partial
 from termcolor import cprint
-from urllib.parse import urljoin
 from botocore.exceptions import ClientError
+from utils import render_template
 
 from dotenv import load_dotenv
 from bedrock_llm import AsyncClient, ModelConfig, ModelName
@@ -34,9 +32,11 @@ from bedrock_llm.schema import MessageBlock
 import google.generativeai as genai
 from typing import List
 
+
 # Load environemnt variables
 load_dotenv()
 genai.configure(api_key=os.environ.get("GOOGLE_API_KEY"))
+
 
 hrKbID = os.environ.get("HR_KNOWLEDEG_BASE_ID")
 officeKbID = os.environ.get("365OFFICE_KNOWLEDEG_BASE_ID")
@@ -45,14 +45,7 @@ summary_m_region = os.environ.get("SUMMARY_MODEL_REGION")
 vnstock = Vnstock()
 searcher = OGoogleS()
 runtime = boto3.client("bedrock-agent-runtime", region_name=os.environ.get("KNOWLEDGE_BASE_REGION"))
-critic_model = genai.GenerativeModel(
-    "gemini-1.5-flash-002",
-    system_instruction="""You are the browser critic, you task is to based on the search results to decide which website, 
-links should we investigate futher to answer the question. If you decide to investigate futher links then return the links in the format: ["links 1", "link 2", ... "link n"]. 
-The list should only contain 2 to 4 string of relavant urls that you want to further investigate. You can include more urls than 4 but it is not encourage, only do it if nessasary. DO NOT RETURN ANYTHING ELSE.
-If you decide not to investigate further links then return the string: "No further investigation needed".
-Return the summarizatino for all the links if no need to investigate futher links."""
-)
+gemini_models = genai.GenerativeModel("gemini-1.5-flash-002")
 
 
 config = ModelConfig(
@@ -175,12 +168,12 @@ This tool is useful when you need to look up recent information that might not b
     input_schema=InputSchema(
         type="object",
         properties={
-            "query": PropertyAttr(
-                type="string",
-                description="The query to search the web.",
+            "queries": PropertyAttr(
+                type="array",
+                description="The array of all possible questions to search the web.",
             ),
         },
-        required=["query"],
+        required=["queries"],
     ),
 )
 
@@ -390,13 +383,29 @@ def iterate_through_location(location: dict):
                 return url
     return None
 
-async def web_browser(query: str):
-    return await searcher.search(
-        query=query,
-        max_results=7,
-        extract_text=False,
-        max_text_length=200
-    )
+async def web_browser(queries: List[str]):
+    async def search_single_query(query: str):
+        return await searcher.search(
+            query=query,
+            max_results=5,
+            extract_text=False,
+            max_text_length=200
+        )
+
+    search_tasks = [search_single_query(query) for query in queries]
+    results = await asyncio.gather(*search_tasks)
+    
+    # Flatten results and remove duplicates based on href
+    seen_hrefs = set()
+    unique_results = []
+    
+    for result_list in results:
+        for result in result_list:
+            if result.href not in seen_hrefs:
+                seen_hrefs.add(result.href)
+                unique_results.append(result)
+                
+    return unique_results
 
 async def init_bedrock_client():
     client = AsyncClient(
@@ -406,19 +415,18 @@ async def init_bedrock_client():
     await client._get_async_client()  # Initialize the async client
     return client
 
-async def process_single_result_async(user_question: str, search_result: SearchResult):
+async def process_single_result_async(keywords: List[str], question: str, link_browswer: str):
     logger = setup_logger()
     process_name = multiprocessing.current_process().name
     # logger.info(f"Process {process_name} starting to process URL: {search_result.href}")
 
     """Async part of processing a single result"""
     buffer = ""
-    url = search_result.href
     
     try:
         async with aiohttp.ClientSession() as session:
             async with session.get(
-                url,
+                link_browswer,
                 timeout=aiohttp.ClientTimeout(
                     total=10,
                     connect=10/2,
@@ -426,11 +434,9 @@ async def process_single_result_async(user_question: str, search_result: SearchR
                 )
             ) as response:
                 if response.status != 200:
-                    logger.error(f"Process {process_name} - Failed to fetch URL: {search_result.href} - Status: {response.status}")
+                    logger.error(f"Process {process_name} - Failed to fetch URL: {link_browswer} - Status: {response.status}")
                     return {
-                        "title": search_result.title,
-                        "url": search_result.href,
-                        "abstract": search_result.abstract,
+                        "url": link_browswer,
                         "summary": f"Error: Could not fetch content (Status {response.status})"
                     }
                 buffer = await response.text(errors='ignore')
@@ -441,52 +447,40 @@ async def process_single_result_async(user_question: str, search_result: SearchR
                 except Exception as e:
                     logger.error(f"Process {process_name} - Failed to initialize Bedrock client: {str(e)}")
                     return {
-                        "title": search_result.title,
-                        "url": search_result.href,
-                        "abstract": search_result.abstract,
+                        "url": link_browswer,
                         "summary": f"AWS Client Error: {str(e)}"
                     }
                 
                 try:
-                    prompt = f"""Extract relevant information about user's query: {user_question} from this HTML content source.
-
-HTML Content: 
-
-{buffer[:100000]}
-
-Note: Make sure the information can answer 100% the user's question. The information should contain facets, numbers, and statistics if available.
-to support the answer.
-Do not summarize. Only Extract and return the relevant information.
-"""
                     async for _,_,response in summary_model.generate_async(
-                        prompt=prompt,
+                        prompt=render_template(
+                            "extractor.j2",{
+                                "keywords": ", ".join(keywords),
+                                "buffer": buffer[:100000],
+                                "questions": question
+                            }
+                        ),
                         config=config
                     ):
                         pass
 
                     return {
-                        "title": search_result.title,
-                        "url": search_result.href,
-                        "abstract": search_result.abstract,
+                        "url": link_browswer,
                         "summary": response.content[0].text
                     }
                 finally:
                     await summary_model.close()  # Ensure client is closed
 
     except aiohttp.ClientError as e:
-        logger.error(f"Process {process_name} - Network error for {search_result.href}: {str(e)}")
+        logger.error(f"Process {process_name} - Network error for {link_browswer}: {str(e)}")
         return {
-            "title": search_result.title,
-            "url": search_result.href,
-            "abstract": search_result.abstract,
+            "url": link_browswer,
             "summary": f"Network error: {str(e)}"
         }
     except Exception as e:
-        logger.error(f"Process {process_name} - Unexpected error processing {search_result.href}: {str(e)}")
-        return {
-            "title": search_result.title,
-            "url": search_result.href,
-            "abstract": search_result.abstract,
+        logger.error(f"Process {process_name} - Unexpected error processing {link_browswer}: {str(e)}")
+        return {   
+            "url": link_browswer,
             "summary": f"Processing error: {str(e)}"
         }
 
@@ -505,7 +499,7 @@ def setup_logger():
         logger.propagate = False
     return logger
 
-def process_in_process(user_question: str, search_result: SearchResult):
+def process_in_process(keywords: List[str], question: str, search_results: str):
     """Function that runs in separate process"""
 
     # logger = setup_logger()
@@ -518,14 +512,14 @@ def process_in_process(user_question: str, search_result: SearchResult):
     try:
         # Run the async function in the process's event loop
         result = loop.run_until_complete(
-            process_single_result_async(user_question, search_result)
+            process_single_result_async(keywords, question, search_results)
         )
         return result
     finally:
         loop.close()
 
 @monitor_async
-async def process_search_results(question: str, search_results: list[SearchResult]):
+async def process_search_results(keywords: List[str], search_results: List[str], question: str):
     """Process multiple search results using true parallelism with ProcessPoolExecutor"""
 
     # Initialize multiprocessing logger
@@ -538,7 +532,7 @@ async def process_search_results(question: str, search_results: list[SearchResul
     logger.info(f"Starting processing with {num_processes} processes")
 
     # Create partial function with fixed question parameter
-    process_func = partial(process_in_process, question)
+    process_func = partial(process_in_process, keywords, question)
     
     results = []
     
@@ -559,45 +553,61 @@ async def process_search_results(question: str, search_results: list[SearchResul
             try:
                 result = future.result()
                 results.append(result)
-                logger.info(f"Completed processing URL: {search_result.href}")
+                logger.info(f"Completed processing URL: {search_result}")
                 # Print result as soon as it's available
                 cprint(f"\nProcessed Result:", "green")
-                cprint(f"Title: {result['title']}", "green")
                 cprint(f"URL: {result['url']}", "green")
-                cprint(f"Summary: {result['summary']}", "green")
                 cprint("-" * 80, "cyan")
             except Exception as e:
-                print(f"Error processing {search_result.href}: {str(e)}")
+                print(f"Error processing {search_result}: {str(e)}")
     
     return results
 
 @Agent.tool(tool_web_suffing)
-async def web_suffing(query: str):
-    search_results = await web_browser(query)
+async def web_suffing(queries: List[str]):
+    logger = setup_logger()
+    search_results = await web_browser(queries)
 
-    links = critic_model.generate_content(
-        contents=f"{search_results}\n\nBased on the search results, which links are most relevant to the question: '{query}'?\n\n",
+    logger.info(f"Search results: {search_results}")
+
+    evaluation = gemini_models.generate_content(
+        contents=render_template(
+            "links_evaluator.j2", {
+                "real_date": (datetime.now() + timedelta(hours=7)).strftime('%Y-%m-%d %H:%M:%S'),
+                "query": queries,
+                "search_results": search_results,
+            }
+        ),
     )
 
-    if isinstance(eval(links.text), List):
+    eval_res = evaluation.text.strip()[7:-3].strip() if evaluation.text.strip().startswith('```') else evaluation.text.strip()
+
+    logger.info(f"{eval_res}")
+
+    if json.loads(eval_res).get("keywords"):
+        eval_res = json.loads(eval_res)
+
         # Process results in parallel
-        summaries = await process_search_results(query, search_results)
+        summaries = await process_search_results(
+            eval_res["keywords"], 
+            eval_res["links"],
+            question=queries
+        )
         
         # Extract and combine summaries into a single string
         formatted_summaries = []
         for summary in summaries:
             formatted_summary = f"""
-<title>{summary['title']}</title>
 <url>{summary['url']}</url>
 <summary>{summary['summary']}</summary>
 -------------------
 """
             formatted_summaries.append(formatted_summary)
         
-        # Join all formatted summaries and return
+        
         return "\n".join(formatted_summaries)
     else:
-        return links.text
+        return eval_res
 
 @Agent.tool(tool_send_email)
 async def send_email(recipient: str, subject: str, body: str, attachment_path: list[str] = []):
@@ -680,6 +690,6 @@ async def raise_problems_to_IT(problem: str, sender_name: str, sender_role: str,
 
 
 if __name__ == "__main__":
-    result = asyncio.run(raise_problems_to_IT("Test problem", "John Doe", "Developer", "john@example.com"))
+    result = asyncio.run(web_suffing("What are configurations of the new Apple Chips?"))
     print(result)
     pass
