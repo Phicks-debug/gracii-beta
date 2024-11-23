@@ -2,11 +2,9 @@
 import json
 import uuid
 import os
-import main
 import logging
 import random
 import asyncio
-import requests
 import boto3
 import aioboto3
 import aiohttp
@@ -37,6 +35,7 @@ from typing import List
 load_dotenv()
 genai.configure(api_key=os.environ.get("GOOGLE_API_KEY"))
 
+tokens = {}
 
 hrKbID = os.environ.get("HR_KNOWLEDEG_BASE_ID")
 officeKbID = os.environ.get("365OFFICE_KNOWLEDEG_BASE_ID")
@@ -608,48 +607,6 @@ async def web_suffing(queries: List[str]):
         return "\n".join(formatted_summaries)
     else:
         return eval_res
-
-@Agent.tool(tool_send_email)
-async def send_email(recipient: str, subject: str, body: str, attachment_path: list[str] = []):
-    try:
-        # First authenticate
-        auth_response = await main.login()
-        
-        # Check if we got redirected to Microsoft login
-        if auth_response.status_code == 307:  # Temporary redirect
-            return "Please authenticate first by visiting http://localhost:8000/send-email-tool/authentication"
-            
-        # Send the email using the correct endpoint
-        email_data = {
-            "to_email": recipient,
-            "subject": subject,
-            "body": body
-        }
-        
-        # Convert to form data since the endpoint expects Form data
-        form_data = {
-            "to_email": recipient,
-            "subject": subject,
-            "body": body,
-        }
-        
-        if attachment_path and len(attachment_path) > 0:
-            form_data["attachment_path"] = attachment_path[0]  # Take first attachment if any
-            
-        email_response = requests.post(
-            "http://localhost:8000/send-email-tool/send",
-            data=form_data  # Use data instead of json for form data
-        )
-        
-        if email_response.status_code != 200:
-            return f"Failed to send email: {email_response.text}"
-            
-        return "Email sent successfully"
-        
-    except requests.exceptions.ConnectionError:
-        return "Failed to connect to email service. Is the server running?"
-    except Exception as e:
-        return f"Unexpected error: {str(e)}"
 
 @Agent.tool(tool_it_support)
 async def raise_problems_to_IT(problem: str, sender_name: str, sender_role: str, sender_email: str):

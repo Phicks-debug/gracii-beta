@@ -1,9 +1,11 @@
 
 import aiohttp
 import aiofiles
-from asyncio import Event, create_task, gather
-from fastapi import FastAPI, HTTPException, Form
-from fastapi.responses import StreamingResponse, RedirectResponse
+import secrets
+
+from asyncio import Event, Queue
+from fastapi import FastAPI, HTTPException
+from fastapi.responses import StreamingResponse, RedirectResponse, HTMLResponse
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 from typing import List, Dict, Optional
@@ -14,17 +16,24 @@ import tools
 import os
 
 from utils import render_template
+from tools import tool_send_email
 from bedrock_llm import Agent, ModelName, StopReason, ModelConfig
 from bedrock_llm.schema import MessageBlock
 from groq import AsyncGroq
 from dotenv import load_dotenv
+from urllib.parse import quote
+
 load_dotenv()
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+# Declare database variable
+# In-memory store for chat history (replace with database in production)
+chat_history_store: Dict[str, List[MessageBlock]] = {}
 tokens = {}
+
 main_region = os.environ.get("MAIN_MODEL_REGION")
 main_temp = os.environ.get("MAIN_MODEL_TEMP")
 main_topk = os.environ.get("MAIN_MODEL_TOP_K")
@@ -71,9 +80,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# In-memory store for chat history (replace with database in production)
-chat_history_store: Dict[str, List[MessageBlock]] = {}
-
 # Add a helper function to manage chat history
 async def manage_chat_history(conversation_id: str, message: MessageBlock) -> List[MessageBlock]:
     if conversation_id not in chat_history_store:
@@ -98,6 +104,128 @@ async def delete_chat_history(conversation_id: str, position: Optional[int]=None
         chat_history_store[conversation_id].clear()
     else:
         chat_history_store[conversation_id].pop(position)
+
+
+@Agent.tool(tool_send_email)
+async def send_email(recipient: str, subject: str, body: str, attachment_path: list[str] = []):
+    result = await authenticate_email(recipient, subject, body, attachment_path)
+    if isinstance(result, dict) and result.get("status") == "authentication_required":
+        state = secrets.token_urlsafe(16)
+        
+        # Store email details and redirect
+        app.state.pending_emails[state] = {
+            "recipient": recipient,
+            "subject": subject,
+            "body": body,
+            "attachment_path": attachment_path
+        }
+
+        # Create a queue for this request
+        response_queue = Queue()
+        app.state.email_queues = getattr(app.state, 'email_queues', {})
+        app.state.email_queues[state] = response_queue
+
+        # Redirect to auth URL
+        RedirectResponse(url=result["auth_url"])
+        
+        try:
+            response = await response_queue.get()
+            del app.state.email_queues[state]   # Cleanup
+            return str(response)
+        except Exception as e:
+            logger.error(f"Error waiting for email response: {str(e)}")
+            return f"Error: {str(e)}"
+
+    return str(result)
+
+async def authenticate_email(recipient: str, subject: str, body: str, attachment_path: list[str] = []):
+    try:
+        async with aiohttp.ClientSession() as session:
+            # Check if we have valid tokens
+            if not tokens.get("access_token"):
+
+                state = secrets.token_urlsafe(16)
+                
+                # Store the email details for after authentication
+                app.state.pending_emails = getattr(app.state, 'pending_emails', {})
+                app.state.pending_emails[state] = {
+                    "recipient": recipient,
+                    "subject": subject,
+                    "body": body,
+                    "attachment_path": attachment_path
+                }
+
+                auth_url = (f"{os.environ.get('AUTH_URL')}"
+                           f"?client_id={os.environ.get('CLIENT_ID')}"
+                           f"&response_type=code"
+                           f"&redirect_uri={quote(os.environ.get('REDIRECT_URI'))}"
+                           f"&scope={quote(os.environ.get('SCOPES'))}"
+                           f"&response_mode=query"
+                           f"&state={state}")
+            
+                # Return special response that frontend will recognize
+                return {
+                    "status": "authentication_required",
+                    "auth_url": auth_url,
+                    "message": "Please authenticate in the opened window. The email will be sent automatically after authentication."
+                }
+
+            # If we have a token, proceed with sending email
+            return await send_email_with_token(recipient, subject, body, attachment_path, tokens["access_token"])
+
+    except Exception as e:
+        return f"Unexpected error: {str(e)}"
+
+async def send_email_with_token(recipient: str, subject: str, body: str, attachment_path: list[str], access_token: str):
+    """Helper function to send email once we have a valid token"""
+    async with aiohttp.ClientSession() as session:
+        message = {
+            "message": {
+                "subject": subject,
+                "body": {
+                    "contentType": "Text",
+                    "content": body,
+                },
+                "toRecipients": [{"emailAddress": {"address": recipient}}],
+                "attachments": []
+            }
+        }
+
+        # Handle attachments if provided
+        if attachment_path and len(attachment_path) > 0:
+            try:
+                async with aiofiles.open(attachment_path[0], "rb") as file:
+                    file_content = await file.read()
+                    message["message"]["attachments"].append({
+                        "@odata.type": "#microsoft.graph.fileAttachment",
+                        "name": os.path.basename(attachment_path[0]),
+                        "contentBytes": file_content.decode("latin1")
+                    })
+            except Exception as e:
+                return f"Error processing attachment: {str(e)}"
+
+        # Send email using Microsoft Graph API
+        async with session.post(
+            "https://graph.microsoft.com/v1.0/me/sendMail",
+            json=message,
+            headers={
+                "Authorization": f"Bearer {access_token}",
+                "Content-Type": "application/json"
+            }
+        ) as response:
+            if response.status != 202:
+                error_text = await response.text()
+                if response.status == 401:
+                    return {
+                        "status": "authentication_required",
+                        "message": "Session expired. Please re-authenticate."
+                    }
+                return f"Failed to send email: {error_text}"
+            
+            return {
+                "status": "success",
+                "message": f"Email sent successfully to {recipient} with subject {subject}. You can check your inbox email to confirm."
+            }
 
 
 @app.get("/")
@@ -231,88 +359,63 @@ async def delete_chat(conversation_id: str):
     return {"status": "deleted", "conversation_id": conversation_id}
 
 
-@app.get("/send-email-tool/authentication")
-async def login():
-    """Redirects user to Microsoft login."""
-    return RedirectResponse(
-        f"{os.environ.get('AUTH_URL')}?client_id={os.environ.get('CLIENT_ID')}&response_type=code&redirect_uri={os.environ.get('REDIRECT_URI')}&scope={os.environ.get('SCOPES')}"
-    )
-
-
-@app.get("/send-email-tool/authentication/callback")
-async def callback(code: str):
+@app.get("/callback")
+async def callback(code: str, state: str = None):
     """Handles OAuth2 callback and exchanges the authorization code for an access token."""
-    async with aiohttp.ClientSession() as session:
-        async with session.post(
-            os.environ.get("TOKEN_URL"),
-            data={
-                "client_id": os.environ.get("CLIENT_ID"),
-                "redirect_uri": os.environ.get("REDIRECT_URI"),
-                "code": code,
-                "grant_type": "authorization_code",
-            },
-        ) as response:
-            if response.status != 200:
-                raise HTTPException(
-                    status_code=response.status, detail=await response.text()
-                )
-            token_data = await response.json()
-            tokens["access_token"] = token_data["access_token"]
-            tokens["refresh_token"] = token_data.get("refresh_token")
-            return {"message": "Authentication successful", "access_token": tokens["access_token"]}
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.post(
+                os.environ.get("TOKEN_URL"),
+                data={
+                    "client_id": os.environ.get("CLIENT_ID"),
+                    "redirect_uri": os.environ.get("REDIRECT_URI"),
+                    "code": code,
+                    "grant_type": "authorization_code",
+                    "scope": os.environ.get("SCOPES"),
+                },
+            ) as response:
+                if response.status != 200:
+                    raise HTTPException(
+                        status_code=response.status, detail=await response.text()
+                    )
+                token_data = await response.json()
+                tokens["access_token"] = token_data["access_token"]
+                tokens["refresh_token"] = token_data.get("refresh_token")
 
+                # If there's a pending email, send it
+                pending_emails = getattr(app.state, 'pending_emails', {})
+                email_queues = getattr(app.state, 'email_queues', {})
 
-@app.post("/send-email-tool/send")
-async def send_email(
-    to_email: str = Form(...),
-    subject: str = Form(...),
-    body: str = Form(...),
-    attachment_path: str = Form(None),
-):
-    """Sends an email with optional attachment using Microsoft Graph."""
-    if "access_token" not in tokens:
-        raise HTTPException(status_code=401, detail="Not authenticated. Please log in.")
+                if state and state in pending_emails:
+                    email_data = pending_emails[state]
+                    
+                    # Send the email
+                    try:
+                        result = await send_email_with_token(
+                            email_data["recipient"],
+                            email_data["subject"],
+                            email_data["body"],
+                            email_data["attachment_path"],
+                            tokens["access_token"]
+                        )
 
-    message = {
-        "message": {
-            "subject": subject,
-            "body": {
-                "contentType": "Text",
-                "content": body,
-            },
-            "toRecipients": [{"emailAddress": {"address": to_email}}],
-            "attachments": [],
-        }
-    }
+                        # Put result in queue if it exists
+                        if state in email_queues:
+                            await email_queues[state].put(result)
 
-    # Add attachment if provided
-    if attachment_path:
-        try:
-            filename = os.path.basename(attachment_path)
-            async with aiofiles.open(attachment_path, "rb") as file:
-                file_content = await file.read()
-            message["message"]["attachments"].append(
-                {
-                    "@odata.type": "#microsoft.graph.fileAttachment",
-                    "name": filename,
-                    "contentBytes": file_content.decode("latin1"),
-                }
-            )
-        except Exception as e:
-            raise HTTPException(status_code=400, detail=f"Error reading attachment: {e}")
+                        del pending_emails[state]
 
-    # Send email using Microsoft Graph API
-    async with aiohttp.ClientSession() as session:
-        async with session.post(
-            "https://graph.microsoft.com/v1.0/me/sendMail",
-            json=message,
-            headers={"Authorization": f"Bearer {tokens['access_token']}"},
-        ) as response:
-            if response.status != 202:
-                raise HTTPException(
-                    status_code=response.status, detail=await response.text()
-                )
-            return {"message": "Email sent successfully"}
+                    except Exception as e:
+                        error_msg = f"Error sending email: {str(e)}"
+                        if state in email_queues:
+                            await email_queues[state].put({"error": error_msg})
+                        logger.error(error_msg)
+                        return error_msg
+
+                return {"message": "Authentication successful"}
+    except Exception as e:
+        logger.error(f"Callback error: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.get("/chat-history")
