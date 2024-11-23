@@ -7,6 +7,7 @@
 body {
   @apply bg-dark-gray text-white;
   font-family: "Inter", monospace;
+  font-size: 14px;
 }
 
 /* styles.css or index.css */
@@ -175,4 +176,14 @@ textarea {
 
 .typing-input::selection {
   background-color: rgba(255, 235, 59, 0.2);
+}
+
+::selection {
+  background-color: #FFEB3B; /* yellow background */
+  color: #000000; /* black text */
+}
+
+::-moz-selection {
+  background-color: #FFEB3B; /* yellow background for Firefox */
+  color: #000000; /* black text for Firefox */
 }

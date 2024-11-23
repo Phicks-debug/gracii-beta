@@ -1,0 +1,80 @@
+serviceAccount:
+  # Specifies whether a service account should be created
+  create: true
+  # Automatically mount a ServiceAccount's API credentials?
+  automount: false
+  # Annotations to add to the service account
+  annotations: {
+    "eks.amazonaws.com/role-arn": "arn:aws:iam::130506138320:role/k8s-dev-chat-bot-gen-ai"
+  }
+  # The name of the service account to use.
+  # If not set and create is true, a name is generated using the fullname template
+  name: "k8s-genai-gracii"
+
+bot:
+  annotations: {}
+  labels: {}
+  SecurityContext: {}
+  replicaCount: 2
+  imagePullSecrets: []
+  nameOverride: ""
+  fullnameOverride: ""
+  image:
+    uri: 130506138320.dkr.ecr.ap-southeast-1.amazonaws.com/kalliope-genai-bot
+    pullPolicy: Always
+    tag: "2.0.0"
+    defaultTag: "latest"
+  command: ~
+  args: beta-version
+  env: {}
+
+  resources:
+    limits:
+      cpu: 500m
+      memory: 1024Mi
+    requests:
+      cpu: 500m
+      memory: 1024Mi
+
+  autoscaling:
+    enabled: false
+    minReplicas: 1
+    maxReplicas: 100
+    targetCPUUtilizationPercentage: 80
+
+  volumes: []
+  volumeMounts: []
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+
+service:
+  type: ClusterIP
+  port: 5173
+  targetGroupArn: arn:aws:elasticloadbalancing:ap-southeast-1:130506138320:targetgroup/k8s-dev-internal-teams-bot/010e0999d4e4515e
+
+ingress:
+  enabled: false
+  className: ""
+  annotations: 
+    alb.ingress.kubernetes.io/scheme: 'internet-facing' #"internal"
+    alb.ingress.kubernetes.io/target-type: "ip"
+    alb.ingress.kubernetes.io/subnets: subnet-0e8af5959f1175c7e,subnet-09442ba411575a1e2,subnet-03c36f46adaf2d467
+    alb.ingress.kubernetes.io/group.name: kalliope-app-public
+    alb.ingress.kubernetes.io/group.order: "10"
+    alb.ingress.kubernetes.io/healthcheck-path: "/health"
+    alb.ingress.kubernetes.io/healthcheck-interval-seconds: "30"
+    alb.ingress.kubernetes.io/healthcheck-timeout-seconds: "5"
+    alb.ingress.kubernetes.io/success-codes: "200"
+    alb.ingress.kubernetes.io/healthcheck-protocol: "HTTP"
+    alb.ingress.kubernetes.io/healthcheck-healthy-threshold-count: "3"
+    alb.ingress.kubernetes.io/healthcheck-unhealthy-threshold-count: "5"
+    alb.ingress.kubernetes.io/listen-ports: '[{"HTTPS": 443}]'
+    # alb.ingress.kubernetes.io/security-groups: public-domain-group
+    # kubernetes.io/ingress.class: nginx
+    # kubernetes.io/tls-acme: "true"
+  host: gracii.dev.kalliopedata.io
+  tls: []
+  #  - secretName: chart-example-tls
+  #    hosts:
+  #      - chart-example.local

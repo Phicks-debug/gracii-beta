@@ -1,18 +1,18 @@
 fastapi==0.104.1
 uvicorn==0.24.0
 python-multipart==0.0.6
-boto3>=1.33.0
-aioboto3
-botocore>=1.21.0
+boto3==1.28.0
+aioboto3==11.0.0
 pydantic==2.5.1
-bedrock-llm==0.1.8.5
+bedrock-llm
 jinja2==3.1.4
 requests==2.31.0
 vnstock3==3.1.0
 python-dotenv==1.0.1
-grpcio==1.68.0
-grpcio-tools==1.68.0
+# grpcio==1.68.0
+# grpcio-tools==1.68.0
 google-generativeai==0.8.3
 webscout
-arcade-ai[fastapi]
+# arcade-ai[fastapi]
 aiofiles==24.1.0
+groq==0.12.0
