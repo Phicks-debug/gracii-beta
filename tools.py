@@ -456,7 +456,7 @@ async def process_single_result_async(keywords: List[str], question: str, link_b
                         prompt=render_template(
                             "extractor.j2",{
                                 "keywords": ", ".join(keywords),
-                                "buffer": buffer[:100000],
+                                "buffer": buffer[:180000],
                                 "questions": question
                             }
                         ),
