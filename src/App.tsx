@@ -113,7 +113,7 @@ function App() {
 
       try {
         const response = await fetch(
-          `http://localhost:8000/chat/${conversationId}`,
+          `${import.meta.env.REACT_APP_API_BASE_URL}/chat/${conversationId}`,
           {
             method: "POST",
             headers: {
